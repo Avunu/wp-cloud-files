@@ -350,6 +350,9 @@ class CLI
      *
      * ## OPTIONS
      *
+     * [<attachment-id>]
+     * : Process only this specific attachment ID.
+     *
      * [--limit=<number>]
      * : Maximum number of attachments to process.
      * ---
@@ -374,6 +377,9 @@ class CLI
      *     # Regenerate thumbnails for all supported documents
      *     $ wp wp-cloud-files regenerate-thumbnails
      *
+     *     # Regenerate thumbnails for a specific attachment
+     *     $ wp wp-cloud-files regenerate-thumbnails 8082
+     *
      *     # Regenerate thumbnails only for PDFs
      *     $ wp wp-cloud-files regenerate-thumbnails --type=application/pdf
      *
@@ -388,6 +394,7 @@ class CLI
      */
     public function regenerate_thumbnails($args, $assoc_args)
     {
+        $specific_id = !empty($args[0]) ? (int) $args[0] : null;
         $limit = (int) ($assoc_args['limit'] ?? 0);
         $offset = (int) ($assoc_args['offset'] ?? 0);
         $force = isset($assoc_args['force']);
@@ -395,49 +402,56 @@ class CLI
 
         // Supported document mime types (from DocumentThumbnailer)
         $supported_mime_types = [
-            // PDF
             'application/pdf',
-            // Word documents
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'application/msword',
             'application/vnd.oasis.opendocument.text',
             'application/rtf',
             'text/rtf',
-            // Spreadsheets
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'application/vnd.ms-excel',
             'application/vnd.oasis.opendocument.spreadsheet',
             'text/csv',
-            // Presentations
             'application/vnd.openxmlformats-officedocument.presentationml.presentation',
             'application/vnd.ms-powerpoint',
             'application/vnd.oasis.opendocument.presentation',
         ];
 
-        // Filter to specific type if requested
-        if ($type_filter) {
-            if (!in_array($type_filter, $supported_mime_types, true)) {
-                WP_CLI::error(sprintf('Unsupported mime type: %s', $type_filter));
+        // Handle specific attachment ID
+        if ($specific_id) {
+            $post = get_post($specific_id);
+            if (!$post || $post->post_type !== 'attachment') {
+                WP_CLI::error(sprintf('Attachment #%d not found.', $specific_id));
                 return;
             }
-            $mime_types = [$type_filter];
+            $attachments = [$specific_id];
+            WP_CLI::log(sprintf('Processing attachment #%d: %s', $specific_id, $post->post_title));
         } else {
-            $mime_types = $supported_mime_types;
+            // Filter to specific type if requested
+            if ($type_filter) {
+                if (!in_array($type_filter, $supported_mime_types, true)) {
+                    WP_CLI::error(sprintf('Unsupported mime type: %s', $type_filter));
+                    return;
+                }
+                $mime_types = [$type_filter];
+            } else {
+                $mime_types = $supported_mime_types;
+            }
+
+            $query_args = [
+                'post_type'      => 'attachment',
+                'post_status'    => 'inherit',
+                'post_mime_type' => $mime_types,
+                'posts_per_page' => $limit > 0 ? $limit : -1,
+                'offset'         => $offset,
+                'orderby'        => 'ID',
+                'order'          => 'ASC',
+                'fields'         => 'ids',
+            ];
+
+            $attachments = get_posts($query_args);
         }
 
-        // Get attachments
-        $query_args = [
-            'post_type'      => 'attachment',
-            'post_status'    => 'inherit',
-            'post_mime_type' => $mime_types,
-            'posts_per_page' => $limit > 0 ? $limit : -1,
-            'offset'         => $offset,
-            'orderby'        => 'ID',
-            'order'          => 'ASC',
-            'fields'         => 'ids',
-        ];
-
-        $attachments = get_posts($query_args);
         $total = count($attachments);
 
         if ($total === 0) {
@@ -447,7 +461,7 @@ class CLI
 
         WP_CLI::log(sprintf('Found %d document attachments to process...', $total));
 
-        $progress = Utils\make_progress_bar('Regenerating thumbnails', $total);
+        $progress = $total > 1 ? Utils\make_progress_bar('Regenerating thumbnails', $total) : null;
         $stats = ['success' => 0, 'failed' => 0, 'skipped' => 0];
 
         $thumbnailer = new DocumentThumbnailer();
@@ -456,61 +470,85 @@ class CLI
         $basedir = trailingslashit($uploads['basedir']);
 
         foreach ($attachments as $attachment_id) {
+            $verbose = (bool) $specific_id;
             $metadata = wp_get_attachment_metadata($attachment_id);
             
-            // Ensure metadata is an array
             if (!is_array($metadata)) {
                 $metadata = [];
             }
 
-            // Skip if already has thumbnails (unless force)
-            if (!$force && !empty($metadata['sizes'])) {
-                WP_CLI::debug(sprintf('Attachment #%d: Already has thumbnails, skipping.', $attachment_id));
-                $stats['skipped']++;
-                $progress->tick();
-                continue;
-            }
-
-            // Get mime type for this attachment
             $mime_type = get_post_mime_type($attachment_id);
             
             if (!$mime_type || !in_array($mime_type, $supported_mime_types, true)) {
-                WP_CLI::debug(sprintf('Attachment #%d: Unsupported mime type %s, skipping.', $attachment_id, $mime_type));
+                if ($verbose) WP_CLI::log(sprintf('  Unsupported mime type: %s', $mime_type));
                 $stats['skipped']++;
-                $progress->tick();
+                if ($progress) $progress->tick();
                 continue;
             }
 
-            // Get the file path
+            // Get file info
             $file = get_attached_file($attachment_id);
-            $s3_url = wp_get_attachment_url($attachment_id);
             $relative_path = str_replace($basedir, '', $file);
+            $base_relative_dir = dirname($relative_path);
+
+            // Check if we need to regenerate
+            $needs_regen = $force;
+            
+            if (!$needs_regen && empty($metadata['sizes'])) {
+                $needs_regen = true;
+                if ($verbose) WP_CLI::log('  No sizes in metadata, will generate.');
+            }
+            
+            // Check if 'full' size exists (needed for media library preview)
+            if (!$needs_regen && !isset($metadata['sizes']['full'])) {
+                $needs_regen = true;
+                if ($verbose) WP_CLI::log('  Missing "full" size, will generate.');
+            }
+            
+            // Check if files actually exist on S3
+            if (!$needs_regen && !empty($metadata['sizes'])) {
+                foreach ($metadata['sizes'] as $size_name => $size_data) {
+                    if (!empty($size_data['file'])) {
+                        $thumb_path = ltrim("{$base_relative_dir}/{$size_data['file']}", '/');
+                        try {
+                            if (!$s3Client->getFilesystem()->fileExists($thumb_path)) {
+                                $needs_regen = true;
+                                if ($verbose) WP_CLI::log(sprintf('  Size "%s" missing from S3, will regenerate.', $size_name));
+                                break;
+                            }
+                        } catch (\Exception $e) {
+                            $needs_regen = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!$needs_regen) {
+                if ($verbose) WP_CLI::log('  All thumbnails exist, skipping.');
+                $stats['skipped']++;
+                if ($progress) $progress->tick();
+                continue;
+            }
+
+            // Download from S3 if needed
             $file_dir = dirname($file);
             $cleanup_temp = false;
 
-            // Download from S3 if file doesn't exist locally
             if (!file_exists($file)) {
-                WP_CLI::debug(sprintf('Attachment #%d: Downloading from S3...', $attachment_id));
-
-                // Create directory if it doesn't exist
+                if ($verbose) WP_CLI::log('  Downloading from S3...');
+                
                 if (!is_dir($file_dir)) {
                     wp_mkdir_p($file_dir);
                 }
 
+                $s3_url = wp_get_attachment_url($attachment_id);
                 $response = wp_remote_get($s3_url, ['timeout' => 120]);
 
-                if (is_wp_error($response)) {
-                    WP_CLI::debug(sprintf('Attachment #%d: Failed to download - %s', $attachment_id, $response->get_error_message()));
+                if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+                    if ($verbose) WP_CLI::log('  Failed to download from S3.');
                     $stats['failed']++;
-                    $progress->tick();
-                    continue;
-                }
-
-                $http_code = wp_remote_retrieve_response_code($response);
-                if ($http_code !== 200) {
-                    WP_CLI::debug(sprintf('Attachment #%d: Failed to download - HTTP %d', $attachment_id, $http_code));
-                    $stats['failed']++;
-                    $progress->tick();
+                    if ($progress) $progress->tick();
                     continue;
                 }
 
@@ -518,20 +556,12 @@ class CLI
                 $cleanup_temp = true;
             }
 
-            // Generate thumbnails
+            // Generate thumbnails - include 'full' for media library preview
             $sizes = [
-                'thumbnail' => [
-                    'width'  => get_option('thumbnail_size_w', 150),
-                    'height' => get_option('thumbnail_size_h', 150),
-                ],
-                'medium' => [
-                    'width'  => get_option('medium_size_w', 300),
-                    'height' => get_option('medium_size_h', 300),
-                ],
-                'large' => [
-                    'width'  => get_option('large_size_w', 1024),
-                    'height' => get_option('large_size_h', 1024),
-                ],
+                'full' => ['width' => 1500, 'height' => 1500],
+                'thumbnail' => ['width' => get_option('thumbnail_size_w', 150), 'height' => get_option('thumbnail_size_h', 150)],
+                'medium' => ['width' => get_option('medium_size_w', 300), 'height' => get_option('medium_size_h', 300)],
+                'large' => ['width' => get_option('large_size_w', 1024), 'height' => get_option('large_size_h', 1024)],
             ];
 
             if (!isset($metadata['sizes'])) {
@@ -540,71 +570,59 @@ class CLI
 
             $generated = false;
             $original_filename = pathinfo($file, PATHINFO_FILENAME);
-            $base_relative_dir = dirname($relative_path);
 
             foreach ($sizes as $size_name => $dimensions) {
-                $thumbnail_path = $thumbnailer->generateThumbnail(
-                    $file,
-                    $mime_type,
-                    $dimensions['width'],
-                    $dimensions['height']
-                );
+                $thumbnail_path = $thumbnailer->generateThumbnail($file, $mime_type, $dimensions['width'], $dimensions['height']);
 
                 if (!$thumbnail_path || !file_exists($thumbnail_path)) {
-                    WP_CLI::debug(sprintf('Attachment #%d: Failed to generate %s thumbnail.', $attachment_id, $size_name));
+                    if ($verbose) WP_CLI::log(sprintf('  Failed to generate %s thumbnail.', $size_name));
                     continue;
                 }
 
-                // Create filename and destination
                 $thumbnail_filename = "{$original_filename}-{$size_name}.jpg";
                 $thumbnail_dest = "{$file_dir}/{$thumbnail_filename}";
                 $thumbnail_relative = ltrim("{$base_relative_dir}/{$thumbnail_filename}", '/');
 
-                // Move thumbnail to uploads directory
                 if (rename($thumbnail_path, $thumbnail_dest)) {
-                    // Get dimensions
                     $img_dimensions = getimagesize($thumbnail_dest);
+                    if ($img_dimensions) {
+                        $metadata['sizes'][$size_name] = [
+                            'file'      => $thumbnail_filename,
+                            'width'     => $img_dimensions[0],
+                            'height'    => $img_dimensions[1],
+                            'mime-type' => 'image/jpeg',
+                        ];
+                        
+                        if ($size_name === 'full') {
+                            $metadata['sizes'][$size_name]['filesize'] = filesize($thumbnail_dest);
+                        }
 
-                    // Add to metadata
-                    $metadata['sizes'][$size_name] = [
-                        'file'      => $thumbnail_filename,
-                        'width'     => $img_dimensions[0],
-                        'height'    => $img_dimensions[1],
-                        'mime-type' => 'image/jpeg',
-                    ];
-
-                    // Upload thumbnail to S3
-                    if ($s3Client->uploadFile($thumbnail_dest, $thumbnail_relative)) {
-                        // Delete local thumbnail after upload
-                        @unlink($thumbnail_dest);
-                        $generated = true;
-                        WP_CLI::debug(sprintf('Attachment #%d: Generated and uploaded %s thumbnail.', $attachment_id, $size_name));
+                        if ($s3Client->uploadFile($thumbnail_dest, $thumbnail_relative)) {
+                            @unlink($thumbnail_dest);
+                            $generated = true;
+                            if ($verbose) WP_CLI::log(sprintf('  Generated and uploaded %s.', $size_name));
+                        }
                     }
                 } else {
-                    // Clean up temp file if move failed
                     @unlink($thumbnail_path);
                 }
             }
 
-            // Clean up downloaded file if we downloaded it
             if ($cleanup_temp && file_exists($file)) {
                 @unlink($file);
             }
 
-            // Update metadata
             if ($generated) {
                 wp_update_attachment_metadata($attachment_id, $metadata);
                 $stats['success']++;
-                WP_CLI::debug(sprintf('Attachment #%d: Successfully regenerated thumbnails.', $attachment_id));
             } else {
                 $stats['failed']++;
-                WP_CLI::debug(sprintf('Attachment #%d: Failed to generate any thumbnails.', $attachment_id));
             }
 
-            $progress->tick();
+            if ($progress) $progress->tick();
         }
 
-        $progress->finish();
+        if ($progress) $progress->finish();
 
         WP_CLI::success(sprintf(
             'Thumbnail regeneration completed. Success: %d, Failed: %d, Skipped: %d.',
