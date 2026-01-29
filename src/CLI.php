@@ -40,16 +40,16 @@ class CLI
      * ## EXAMPLES
      *
      *     # Migrate all media files to S3
-     *     $ wp s3uploads migrate
+     *     $ wp wp-cloud-files migrate
      *
      *     # Migrate 50 media files starting from item 100
-     *     $ wp s3uploads migrate --limit=50 --offset=100
+     *     $ wp wp-cloud-files migrate --limit=50 --offset=100
      *
      *     # Migrate and keep local copies
-     *     $ wp s3uploads migrate --keep-local
+     *     $ wp wp-cloud-files migrate --keep-local
      *
      *     # Force re-upload all media
-     *     $ wp s3uploads migrate --force
+     *     $ wp wp-cloud-files migrate --force
      *
      * @param array $args
      * @param array $assoc_args
@@ -374,16 +374,16 @@ class CLI
      * ## EXAMPLES
      *
      *     # Regenerate thumbnails for all supported documents
-     *     $ wp s3uploads regenerate-thumbnails
+     *     $ wp wp-cloud-files regenerate-thumbnails
      *
      *     # Regenerate thumbnails only for PDFs
-     *     $ wp s3uploads regenerate-thumbnails --type=application/pdf
+     *     $ wp wp-cloud-files regenerate-thumbnails --type=application/pdf
      *
      *     # Regenerate thumbnails for 50 attachments starting from item 100
-     *     $ wp s3uploads regenerate-thumbnails --limit=50 --offset=100
+     *     $ wp wp-cloud-files regenerate-thumbnails --limit=50 --offset=100
      *
      *     # Force regenerate all thumbnails
-     *     $ wp s3uploads regenerate-thumbnails --force
+     *     $ wp wp-cloud-files regenerate-thumbnails --force
      *
      * @param array $args
      * @param array $assoc_args
