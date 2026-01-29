@@ -367,9 +367,7 @@ class CLI
      *
      * [--type=<mime-type>]
      * : Only process attachments of this mime type (e.g., application/pdf).
-     * ---
-     * default: all supported document types
-     * ---
+     *   If not specified, all supported document types will be processed.
      *
      * ## EXAMPLES
      *
