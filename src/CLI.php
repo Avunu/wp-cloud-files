@@ -631,4 +631,81 @@ class CLI
             $stats['skipped']
         ));
     }
+    
+    /**
+     * Process pending thumbnail generation queue.
+     *
+     * ## OPTIONS
+     *
+     * [--limit=<number>]
+     * : Maximum number of items to process from queue.
+     * ---
+     * default: 0 (all)
+     * ---
+     *
+     * ## EXAMPLES
+     *
+     *     # Process all pending thumbnails
+     *     $ wp wp-cloud-files process-thumbnails
+     *
+     *     # Process up to 10 pending thumbnails
+     *     $ wp wp-cloud-files process-thumbnails --limit=10
+     *
+     * @param array $args
+     * @param array $assoc_args
+     */
+    public function process_thumbnails($args, $assoc_args)
+    {
+        $limit = (int) ($assoc_args['limit'] ?? 0);
+        
+        $queue = get_option('wp_cloud_files_thumbnail_queue', []);
+        
+        if (empty($queue)) {
+            WP_CLI::warning('Thumbnail queue is empty.');
+            return;
+        }
+        
+        $total = $limit > 0 ? min($limit, count($queue)) : count($queue);
+        
+        WP_CLI::log(sprintf('Processing %d items from thumbnail queue...', $total));
+        
+        $progress = Utils\make_progress_bar('Processing thumbnails', $total);
+        $processor = new ThumbnailProcessor();
+        
+        $stats = ['success' => 0, 'failed' => 0];
+        
+        for ($i = 0; $i < $total; $i++) {
+            // Refresh queue from database each iteration to avoid conflicts
+            $queue = get_option('wp_cloud_files_thumbnail_queue', []);
+            
+            if (empty($queue)) {
+                break;
+            }
+            
+            $attachment_id = array_shift($queue);
+            
+            // Update queue after each item to prevent data loss on interruption
+            update_option('wp_cloud_files_thumbnail_queue', $queue, 'no');
+            
+            if ($processor->generateThumbnails($attachment_id)) {
+                $stats['success']++;
+            } else {
+                $stats['failed']++;
+            }
+            
+            $progress->tick();
+        }
+        
+        // Get final queue count
+        $queue = get_option('wp_cloud_files_thumbnail_queue', []);
+        
+        $progress->finish();
+        
+        WP_CLI::success(sprintf(
+            'Processing completed. Success: %d, Failed: %d. Remaining in queue: %d',
+            $stats['success'],
+            $stats['failed'],
+            count($queue)
+        ));
+    }
 }

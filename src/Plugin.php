@@ -16,6 +16,8 @@ class Plugin
         $mediaHandler = new MediaHandler();
         $urlRewriter = new UrlRewriter();
         $thumbnailHandler = new ThumbnailHandler();
+        $directUploadHandler = new DirectUploadHandler();
+        $thumbnailProcessor = new ThumbnailProcessor();
         
         // URL rewriting for attachments
         add_filter('wp_get_attachment_url', [$urlRewriter, 'rewriteAttachmentUrl'], 10, 2);
@@ -23,17 +25,25 @@ class Plugin
         // Handle image srcset URLs
         add_filter('wp_calculate_image_srcset', [$urlRewriter, 'rewriteSrcsetUrls'], 10, 5);
         
-        // Process complete media after WordPress is done with it
+        // Process complete media after WordPress is done with it (for traditional uploads)
         add_filter('wp_update_attachment_metadata', [$mediaHandler, 'processMedia'], 999, 2);
         
         // Handle deletions
         add_action('delete_attachment', [$mediaHandler, 'handleDeletion'], 10);
         
-        // Handle document thumbnail generation
+        // Handle document thumbnail generation (for traditional uploads)
         add_filter('wp_generate_attachment_metadata', [$thumbnailHandler, 'handleDocumentThumbnails'], 10, 2);
         
         // Filter to show thumbnails in admin
         add_filter('wp_prepare_attachment_for_js', [$thumbnailHandler, 'prepareAttachmentForJs'], 10, 3);
+        
+        // Direct upload handlers
+        add_action('wp_ajax_wp_cloud_files_get_presigned_url', [$directUploadHandler, 'handlePresignedUrlRequest']);
+        add_action('wp_ajax_wp_cloud_files_create_attachment', [$directUploadHandler, 'createAttachmentFromDirectUpload']);
+        add_action('admin_enqueue_scripts', [$directUploadHandler, 'enqueueAdminScripts']);
+        
+        // Thumbnail processing cron
+        add_action('wp_cloud_files_process_thumbnails', [$thumbnailProcessor, 'processQueue']);
         
         // // Handle image editing (in case it bypasses normal upload flow)
         // add_action('wp_ajax_image-editor', function() use ($mediaHandler) {
