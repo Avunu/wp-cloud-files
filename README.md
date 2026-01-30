@@ -4,9 +4,10 @@ WP Cloud Files is a WordPress plugin that seamlessly integrates your WordPress m
 
 ## Features
 
-- Automatically upload media files to S3 storage when added to WordPress
+- **Direct S3 Uploads**: Files are uploaded directly from the browser to S3 using pre-signed URLs, bypassing the WordPress server
 - Serve media files directly from S3, saving your server's bandwidth
 - Support for all standard WordPress image sizes and optimizations
+- **Asynchronous Thumbnail Generation**: Thumbnails are generated in the background via WP-Cron, keeping the upload process fast
 - Generate thumbnails for documents (PDF, Word, Excel, PowerPoint)
 - WP-CLI command for migrating existing media library to S3
 - Supports WebP and AVIF alternatives when enabled in WordPress
@@ -50,7 +51,20 @@ define('S3_ROOT', '');            // Subfolder within bucket to use as root (opt
 
 ### Uploading New Media
 
-Once configured, the plugin automatically handles new media uploads. Just use the WordPress media uploader as usual, and files will be sent to S3 after WordPress processes them.
+The plugin supports two upload methods:
+
+#### Direct S3 Uploads (Default)
+
+When you upload files through the WordPress media uploader, files are sent directly from your browser to S3 using pre-signed URLs. This:
+- Reduces load on your WordPress server
+- Speeds up uploads, especially for large files
+- Allows uploads to complete even if the connection to WordPress is interrupted
+
+Thumbnails are generated asynchronously in the background via WP-Cron, so the upload process completes quickly without waiting for thumbnail generation.
+
+#### Traditional Uploads (Fallback)
+
+If direct upload fails for any reason, the plugin falls back to traditional WordPress upload where files are processed on the server before being moved to S3.
 
 ### Migrating Existing Media
 
@@ -83,12 +97,41 @@ The plugin automatically generates thumbnails for supported document types:
 
 These thumbnails will appear in the WordPress media library just like image thumbnails.
 
+### Processing Thumbnail Queue
+
+Thumbnails are generated asynchronously via WP-Cron. You can also manually process the thumbnail queue:
+
+```bash
+# Process all pending thumbnails
+wp wp-cloud-files process-thumbnails
+
+# Process up to 10 pending thumbnails
+wp wp-cloud-files process-thumbnails --limit=10
+```
+
 ## How It Works
 
-1. When media is uploaded to WordPress, the plugin waits for WordPress to complete all processing (image resizing, WebP conversion, etc.)
-2. Files are then uploaded to your S3 bucket with public read permissions
-3. Local files are removed to save disk space
-4. All URLs are automatically rewritten to point to your S3 bucket
+### Direct Upload Flow
+
+1. When a user selects a file in the WordPress media uploader, the plugin requests a pre-signed S3 URL from the server
+2. The file is uploaded directly from the browser to S3 using the pre-signed URL
+3. After upload completes, a WordPress attachment is created with basic metadata
+4. For images and documents, thumbnail generation is queued for background processing
+5. WP-Cron processes the thumbnail queue asynchronously:
+   - Downloads the file from S3 to temporary storage
+   - Generates all required thumbnail sizes
+   - Uploads thumbnails back to S3
+   - Updates attachment metadata with thumbnail information
+   - Cleans up temporary files
+6. All URLs are automatically rewritten to point to your S3 bucket
+
+### Traditional Upload Flow (Fallback)
+
+1. Files are uploaded to the WordPress server
+2. WordPress processes the file (image resizing, WebP conversion, etc.)
+3. Files are then uploaded to your S3 bucket with public read permissions
+4. Local files are removed to save disk space
+5. All URLs are automatically rewritten to point to your S3 bucket
 
 ## Support
 
