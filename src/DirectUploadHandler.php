@@ -15,7 +15,8 @@ class DirectUploadHandler
             return;
         }
         
-        // Verify nonce
+        // Verify nonce - third parameter is false so we can handle the error ourselves
+        // Always check the return value when using false as the third parameter
         if (!check_ajax_referer('wp-cloud-files-upload', 'nonce', false)) {
             wp_send_json_error(['message' => 'Invalid nonce'], 403);
             return;
@@ -35,10 +36,9 @@ class DirectUploadHandler
         $relative_path = trim(str_replace($upload_dir['basedir'], '', $upload_dir['path']), '/');
         
         // Create unique filename to prevent conflicts
-        $file_info = pathinfo($filename);
         $unique_filename = wp_unique_filename($upload_dir['path'], $filename);
         
-        // Build S3 path
+        // Build S3 path (without S3_ROOT prefix - that's added in generatePresignedUploadUrl)
         $s3_path = $relative_path . '/' . $unique_filename;
         
         // Generate pre-signed URL
@@ -58,6 +58,8 @@ class DirectUploadHandler
     
     /**
      * Create WordPress attachment from directly uploaded file
+     * 
+     * @return void Sends JSON response with attachment_id and attachment object on success
      */
     public function createAttachmentFromDirectUpload(): void
     {
@@ -67,24 +69,36 @@ class DirectUploadHandler
             return;
         }
         
-        // Verify nonce
+        // Verify nonce - third parameter is false so we can handle the error ourselves
+        // Always check the return value when using false as the third parameter
         if (!check_ajax_referer('wp-cloud-files-upload', 'nonce', false)) {
             wp_send_json_error(['message' => 'Invalid nonce'], 403);
             return;
         }
         
-        // Get parameters
+        // Get parameters with validation
         $filename = sanitize_file_name($_POST['filename'] ?? '');
-        $s3_path = sanitize_text_field($_POST['s3_path'] ?? '');
+        $s3_path = $_POST['s3_path'] ?? '';
         $file_type = sanitize_text_field($_POST['file_type'] ?? '');
         $file_size = intval($_POST['file_size'] ?? 0);
+        
+        // Validate s3_path to prevent path traversal
+        if (strpos($s3_path, '..') !== false || strpos($s3_path, '\\') !== false) {
+            wp_send_json_error(['message' => 'Invalid file path'], 400);
+            return;
+        }
+        $s3_path = sanitize_text_field($s3_path);
+        
+        // Validate file size
+        if ($file_size <= 0 || $file_size > wp_max_upload_size()) {
+            wp_send_json_error(['message' => 'Invalid file size'], 400);
+            return;
+        }
         
         if (empty($filename) || empty($s3_path) || empty($file_type)) {
             wp_send_json_error(['message' => 'Missing required parameters'], 400);
             return;
         }
-        
-        $upload_dir = wp_upload_dir();
         
         // Create attachment post
         $attachment = [
@@ -101,13 +115,12 @@ class DirectUploadHandler
             return;
         }
         
-        // Set the file path in attachment metadata
-        $file_path = $upload_dir['basedir'] . '/' . $s3_path;
-        update_attached_file($attachment_id, $file_path);
+        // Set the file path in attachment metadata (relative path, not full path)
+        update_attached_file($attachment_id, $s3_path);
         
         // Handle images: need to download temporarily to get dimensions
         if (strpos($file_type, 'image/') === 0) {
-            $this->handleImageAttachment($attachment_id, $s3_path, $file_type);
+            $this->handleImageAttachment($attachment_id, $s3_path, $file_type, $file_size);
         } else {
             // For non-images, create minimal metadata
             $metadata = [
@@ -133,25 +146,24 @@ class DirectUploadHandler
     /**
      * Handle image attachment metadata
      */
-    private function handleImageAttachment(int $attachment_id, string $s3_path, string $file_type): void
+    private function handleImageAttachment(int $attachment_id, string $s3_path, string $file_type, int $file_size): void
     {
         $s3Client = S3Client::getInstance();
-        $upload_dir = wp_upload_dir();
         
         // Download image temporarily to get dimensions
         $temp_file = wp_tempnam($s3_path);
         
         if ($s3Client->downloadFile($s3_path, $temp_file)) {
             // Get image dimensions
-            $image_size = getimagesize($temp_file);
+            $image_size = @getimagesize($temp_file);
             
-            if ($image_size) {
+            if ($image_size && is_array($image_size)) {
                 // Create basic metadata
                 $metadata = [
                     'width'  => $image_size[0],
                     'height' => $image_size[1],
                     'file'   => $s3_path,
-                    'filesize' => filesize($temp_file),
+                    'filesize' => $file_size,
                 ];
                 
                 // Queue thumbnail generation asynchronously
@@ -159,10 +171,32 @@ class DirectUploadHandler
                 update_post_meta($attachment_id, '_thumbnail_generation_pending', 1);
                 
                 wp_update_attachment_metadata($attachment_id, $metadata);
+            } else {
+                // Failed to get image dimensions - set minimal metadata
+                $metadata = [
+                    'file'   => $s3_path,
+                    'filesize' => $file_size,
+                ];
+                wp_update_attachment_metadata($attachment_id, $metadata);
+                
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log("Failed to get image dimensions for attachment $attachment_id");
+                }
             }
             
             // Clean up temp file
             @unlink($temp_file);
+        } else {
+            // Failed to download - set minimal metadata
+            $metadata = [
+                'file'   => $s3_path,
+                'filesize' => $file_size,
+            ];
+            wp_update_attachment_metadata($attachment_id, $metadata);
+            
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("Failed to download file from S3 for attachment $attachment_id");
+            }
         }
     }
     
@@ -171,17 +205,25 @@ class DirectUploadHandler
      */
     private function queueThumbnailGeneration(int $attachment_id): void
     {
-        // Get existing queue or create new one
+        // Get existing queue or create new one (non-autoloaded for performance)
         $queue = get_option('wp_cloud_files_thumbnail_queue', []);
         
         if (!in_array($attachment_id, $queue)) {
             $queue[] = $attachment_id;
-            update_option('wp_cloud_files_thumbnail_queue', $queue, false);
+            // Use 'no' for autoload to avoid loading queue on every page
+            update_option('wp_cloud_files_thumbnail_queue', $queue, 'no');
         }
         
-        // Schedule cron job if not already scheduled
-        if (!wp_next_scheduled('wp_cloud_files_process_thumbnails')) {
-            wp_schedule_single_event(time() + 60, 'wp_cloud_files_process_thumbnails');
+        // Use a lock to prevent race condition when scheduling
+        $lock_key = 'wp_cloud_files_schedule_lock';
+        if (false === get_transient($lock_key)) {
+            set_transient($lock_key, 1, 5); // 5 second lock
+            
+            // Schedule cron job if not already scheduled
+            if (!wp_next_scheduled('wp_cloud_files_process_thumbnails')) {
+                // Schedule sooner for better user experience (10 seconds)
+                wp_schedule_single_event(time() + 10, 'wp_cloud_files_process_thumbnails');
+            }
         }
     }
     

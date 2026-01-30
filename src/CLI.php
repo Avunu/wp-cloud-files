@@ -675,11 +675,17 @@ class CLI
         $stats = ['success' => 0, 'failed' => 0];
         
         for ($i = 0; $i < $total; $i++) {
+            // Refresh queue from database each iteration to avoid conflicts
+            $queue = get_option('wp_cloud_files_thumbnail_queue', []);
+            
             if (empty($queue)) {
                 break;
             }
             
             $attachment_id = array_shift($queue);
+            
+            // Update queue after each item to prevent data loss on interruption
+            update_option('wp_cloud_files_thumbnail_queue', $queue, 'no');
             
             if ($processor->generateThumbnails($attachment_id)) {
                 $stats['success']++;
@@ -690,8 +696,8 @@ class CLI
             $progress->tick();
         }
         
-        // Update queue
-        update_option('wp_cloud_files_thumbnail_queue', $queue, false);
+        // Get final queue count
+        $queue = get_option('wp_cloud_files_thumbnail_queue', []);
         
         $progress->finish();
         

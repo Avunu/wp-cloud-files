@@ -85,6 +85,11 @@
                                                     message: attachmentResponse.data.message || 'Failed to create attachment',
                                                     file: file
                                                 });
+                                                // Note: File remains in S3 but without WordPress attachment
+                                                // A cleanup mechanism should be implemented server-side
+                                                if (console && console.warn) {
+                                                    console.warn('Orphaned file in S3:', file.s3Data.s3_path);
+                                                }
                                             }
                                         },
                                         error: function(jqXHR, textStatus, errorThrown) {
@@ -94,6 +99,11 @@
                                                 message: 'Failed to create WordPress attachment',
                                                 file: file
                                             });
+                                            // Note: File remains in S3 but without WordPress attachment
+                                            // A cleanup mechanism should be implemented server-side
+                                            if (console && console.warn) {
+                                                console.warn('Orphaned file in S3:', file.s3Data.s3_path);
+                                            }
                                         }
                                     });
                                 } else {

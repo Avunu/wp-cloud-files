@@ -6,30 +6,55 @@ class ThumbnailProcessor
 {
     /**
      * Process thumbnail generation queue
+     * 
+     * Processes items from the queue one at a time. If the queue has more items,
+     * schedules the next run to continue processing. Uses a lock to prevent
+     * concurrent processing.
      */
     public function processQueue(): void
     {
-        $queue = get_option('wp_cloud_files_thumbnail_queue', []);
-        
-        if (empty($queue)) {
+        // Use a lock to prevent concurrent processing
+        $lock_key = 'wp_cloud_files_processing_lock';
+        if (false !== get_transient($lock_key)) {
+            // Another process is already running, skip
             return;
         }
         
-        // Process first item in queue
-        $attachment_id = array_shift($queue);
-        update_option('wp_cloud_files_thumbnail_queue', $queue, false);
+        // Acquire lock for 5 minutes (max processing time)
+        set_transient($lock_key, 1, 300);
         
-        // Generate thumbnails for this attachment
-        $this->generateThumbnails($attachment_id);
-        
-        // If queue still has items, schedule next run
-        if (!empty($queue)) {
-            wp_schedule_single_event(time() + 30, 'wp_cloud_files_process_thumbnails');
+        try {
+            $queue = get_option('wp_cloud_files_thumbnail_queue', []);
+            
+            if (empty($queue)) {
+                return;
+            }
+            
+            // Process first item in queue
+            $attachment_id = array_shift($queue);
+            update_option('wp_cloud_files_thumbnail_queue', $queue, 'no');
+            
+            // Generate thumbnails for this attachment
+            $this->generateThumbnails($attachment_id);
+            
+            // If queue still has items, schedule next run (10 seconds)
+            if (!empty($queue)) {
+                wp_schedule_single_event(time() + 10, 'wp_cloud_files_process_thumbnails');
+            }
+        } finally {
+            // Always release lock
+            delete_transient($lock_key);
         }
     }
     
     /**
      * Generate thumbnails for an attachment
+     * 
+     * Downloads the file from S3, generates thumbnails, uploads them back to S3,
+     * and updates the attachment metadata. Cleans up temporary files.
+     * 
+     * @param int $attachment_id The attachment ID
+     * @return bool True on success, false on failure
      */
     public function generateThumbnails(int $attachment_id): bool
     {
@@ -108,8 +133,8 @@ class ThumbnailProcessor
             return false;
         }
         
-        // Merge with existing metadata
-        $metadata = array_merge($metadata, $new_metadata);
+        // Merge with existing metadata, preserving custom fields
+        $metadata = $this->mergeMetadata($metadata, $new_metadata);
         
         // Upload all generated thumbnails to S3
         $s3Client = S3Client::getInstance();
@@ -256,5 +281,29 @@ class ThumbnailProcessor
         }
         
         return $generated;
+    }
+    
+    /**
+     * Merge new metadata with existing, preserving custom fields
+     * 
+     * @param array $existing Existing metadata
+     * @param array $new New metadata from WordPress
+     * @return array Merged metadata
+     */
+    private function mergeMetadata(array $existing, array $new): array
+    {
+        // Start with new metadata
+        $merged = $new;
+        
+        // Preserve certain custom fields from existing metadata
+        $preserve_keys = ['_wp_attachment_image_alt', 'custom_meta'];
+        
+        foreach ($preserve_keys as $key) {
+            if (isset($existing[$key]) && !isset($merged[$key])) {
+                $merged[$key] = $existing[$key];
+            }
+        }
+        
+        return $merged;
     }
 }

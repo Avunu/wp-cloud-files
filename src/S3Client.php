@@ -120,11 +120,14 @@ class S3Client
      *
      * @param string $s3Path The S3 path where the file will be uploaded
      * @param string $contentType The MIME type of the file
-     * @param int $expiration Expiration time in minutes (default 60)
+     * @param int $expiration Expiration time in minutes (default 60, max 1440)
      * @return string The pre-signed URL
      */
     public function generatePresignedUploadUrl(string $s3Path, string $contentType, int $expiration = 60): string
     {
+        // Validate and cap expiration time (max 24 hours)
+        $expiration = max(5, min($expiration, 1440));
+        
         $client = $this->getS3Client();
         $bucket = S3_BUCKET;
         
@@ -133,12 +136,19 @@ class S3Client
             $s3Path = trim(S3_ROOT, '/') . '/' . ltrim($s3Path, '/');
         }
         
-        $cmd = $client->getCommand('PutObject', [
+        // Configure command parameters based on S3 configuration
+        $commandParams = [
             'Bucket' => $bucket,
             'Key'    => $s3Path,
             'ContentType' => $contentType,
-            'ACL' => 'public-read',
-        ]);
+        ];
+        
+        // Only add ACL if not using bucket owner enforced
+        if (!defined('S3_BUCKET_OWNER_ENFORCED') || !S3_BUCKET_OWNER_ENFORCED) {
+            $commandParams['ACL'] = 'public-read';
+        }
+        
+        $cmd = $client->getCommand('PutObject', $commandParams);
         
         $request = $client->createPresignedRequest($cmd, "+{$expiration} minutes");
         
