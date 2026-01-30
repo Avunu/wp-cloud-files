@@ -45,6 +45,7 @@ define('S3_PUBLIC_URL', 'https://your-public-bucket-url.com');
 define('S3_REGION', 'us-east-1'); // Defaults to 'us-east-1' if not specified
 define('S3_PATH_STYLE', true);    // Set to true for most S3-compatible services (MinIO, DO Spaces)
 define('S3_ROOT', '');            // Subfolder within bucket to use as root (optional)
+define('S3_BUCKET_OWNER_ENFORCED', false); // Set to true if bucket uses "Bucket owner enforced" ownership
 ```
 
 ## Usage
