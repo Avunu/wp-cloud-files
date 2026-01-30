@@ -43,6 +43,7 @@ spl_autoload_register(function ($class) {
 if (defined('WP_CLI') && WP_CLI) {
     WP_CLI::add_command('wp-cloud-files', 'Avunu\\WPCloudFiles\\CLI');
     WP_CLI::add_command('wp-cloud-files regenerate-thumbnails', ['Avunu\\WPCloudFiles\\CLI', 'regenerate_thumbnails']);
+    WP_CLI::add_command('wp-cloud-files process-thumbnails', ['Avunu\\WPCloudFiles\\CLI', 'process_thumbnails']);
 }
 
 // Bootstrap the plugin

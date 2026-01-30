@@ -12,15 +12,16 @@ class S3Client
 {
     private static ?self $instance = null;
     private ?Filesystem $filesystem = null;
+    private ?AwsS3Client $s3Client = null;
     
     public static function getInstance(): self
     {
         return self::$instance ??= new self();
     }
     
-    public function getFilesystem(): Filesystem
+    public function getS3Client(): AwsS3Client
     {
-        if ($this->filesystem === null) {
+        if ($this->s3Client === null) {
             // Build AWS S3 client configuration
             $config = [
                 'credentials' => [
@@ -34,7 +35,17 @@ class S3Client
             ];
             
             // Create S3 client
-            $client = new AwsS3Client($config);
+            $this->s3Client = new AwsS3Client($config);
+        }
+        
+        return $this->s3Client;
+    }
+    
+    public function getFilesystem(): Filesystem
+    {
+        if ($this->filesystem === null) {
+            // Get or create S3 client
+            $client = $this->getS3Client();
             
             // Configure visibility
             $visibility = new PortableVisibilityConverter(
@@ -99,6 +110,81 @@ class S3Client
         } catch (\Throwable $e) {
             if (defined('WP_DEBUG') && WP_DEBUG) {
                 error_log("S3 Delete error: {$e->getMessage()}");
+            }
+            return false;
+        }
+    }
+    
+    /**
+     * Generate a pre-signed URL for direct upload to S3
+     *
+     * @param string $s3Path The S3 path where the file will be uploaded
+     * @param string $contentType The MIME type of the file
+     * @param int $expiration Expiration time in minutes (default 60)
+     * @return string The pre-signed URL
+     */
+    public function generatePresignedUploadUrl(string $s3Path, string $contentType, int $expiration = 60): string
+    {
+        $client = $this->getS3Client();
+        $bucket = S3_BUCKET;
+        
+        // Add S3_ROOT prefix if configured
+        if (defined('S3_ROOT') && S3_ROOT) {
+            $s3Path = trim(S3_ROOT, '/') . '/' . ltrim($s3Path, '/');
+        }
+        
+        $cmd = $client->getCommand('PutObject', [
+            'Bucket' => $bucket,
+            'Key'    => $s3Path,
+            'ContentType' => $contentType,
+            'ACL' => 'public-read',
+        ]);
+        
+        $request = $client->createPresignedRequest($cmd, "+{$expiration} minutes");
+        
+        return (string) $request->getUri();
+    }
+    
+    /**
+     * Download a file from S3 to a local temporary location
+     *
+     * @param string $s3Path The S3 path of the file
+     * @param string $localPath The local path where to save the file
+     * @return bool Success status
+     */
+    public function downloadFile(string $s3Path, string $localPath): bool
+    {
+        try {
+            $stream = $this->getFilesystem()->readStream($s3Path);
+            
+            if ($stream === false) {
+                return false;
+            }
+            
+            $dir = dirname($localPath);
+            if (!is_dir($dir)) {
+                wp_mkdir_p($dir);
+            }
+            
+            $localStream = fopen($localPath, 'w');
+            if ($localStream === false) {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+                return false;
+            }
+            
+            stream_copy_to_stream($stream, $localStream);
+            
+            fclose($localStream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+            
+            return true;
+        } catch (\Throwable $e) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("S3 Download error: {$e->getMessage()}");
             }
             return false;
         }
