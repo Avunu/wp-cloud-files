@@ -4,7 +4,6 @@ namespace Avunu\WPCloudFiles;
 
 class ThumbnailHandler
 {
-    // Document types that should have thumbnails generated
     private array $documentTypes = [
         'application/pdf',
         'application/msword',
@@ -23,9 +22,6 @@ class ThumbnailHandler
 
     private ?DocumentThumbnailer $thumbnailer = null;
 
-    /**
-     * Get the document thumbnailer instance
-     */
     private function getThumbnailer(): DocumentThumbnailer
     {
         if ($this->thumbnailer === null) {
@@ -35,79 +31,38 @@ class ThumbnailHandler
     }
 
     /**
-     * Handle document thumbnail generation during attachment upload
+     * Generate thumbnails for documents during wp_generate_attachment_metadata.
+     * This follows the same pattern as WordPress core and webp-uploads plugin.
      */
     public function handleDocumentThumbnails(array $metadata, int $attachmentId): array
     {
-        // Get attachment MIME type
         $mimeType = get_post_mime_type($attachmentId);
         
-        // Check if this is a document type we should handle
-        if (!in_array($mimeType, $this->documentTypes)) {
+        if (!in_array($mimeType, $this->documentTypes, true)) {
             return $metadata;
         }
         
-        // Debug log
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("WP Cloud Files: Generating thumbnail for document {$attachmentId} with MIME type {$mimeType}");
+        $filePath = get_attached_file($attachmentId);
+        
+        if (empty($filePath) || !file_exists($filePath)) {
+            return $metadata;
         }
         
-        // If metadata doesn't have a 'sizes' array, create one
         if (!isset($metadata['sizes'])) {
             $metadata['sizes'] = [];
         }
         
-        // Generate thumbnails at standard WP sizes
-        $this->generateThumbnailsForDocument($metadata, $attachmentId);
-        
-        return $metadata;
-    }
-    
-    /**
-     * Generate thumbnails for a document at standard WordPress sizes
-     */
-    private function generateThumbnailsForDocument(array &$metadata, int $attachmentId): void
-    {
-        // Get the standard thumbnail sizes
-        $sizes = [
-            'thumbnail' => [
-                'width' => get_option('thumbnail_size_w', 150),
-                'height' => get_option('thumbnail_size_h', 150),
-            ],
-            'medium' => [
-                'width' => get_option('medium_size_w', 300),
-                'height' => get_option('medium_size_h', 300),
-            ],
-			'large' => [
-				'width' => get_option('large_size_w', 1024),
-				'height' => get_option('large_size_h', 1024),
-			]
-        ];
-        
-        // Get the file path
-        $filePath = get_attached_file($attachmentId);
-        $mimeType = get_post_mime_type($attachmentId);
-        
-        if (empty($filePath) || !file_exists($filePath)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log("WP Cloud Files: Document file not found for attachment {$attachmentId}");
-            }
-            return;
-        }
-        
-        // Directory to save thumbnail images
-        $uploadsDir = wp_upload_dir();
-        $baseDir = $uploadsDir['basedir'];
-        $baseUrl = $uploadsDir['baseurl'];
-        
-        // Get or create a subdirectory for the attachment
+        // Get registered image sizes to match WordPress behavior
+        $sizes = $this->getImageSizes();
         $attachmentDir = dirname($filePath);
-        $attachmentSubdir = str_replace($baseDir, '', $attachmentDir);
-        $attachmentSubdir = trim($attachmentSubdir, '/');
+        $originalFilename = pathinfo($filePath, PATHINFO_FILENAME);
         
-        // Generate thumbnail for each size
         foreach ($sizes as $sizeName => $dimensions) {
-            // Generate the thumbnail
+            // Skip if this size already exists
+            if (isset($metadata['sizes'][$sizeName])) {
+                continue;
+            }
+            
             $thumbnailPath = $this->getThumbnailer()->generateThumbnail(
                 $filePath,
                 $mimeType,
@@ -116,74 +71,83 @@ class ThumbnailHandler
             );
             
             if (!$thumbnailPath || !file_exists($thumbnailPath)) {
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log("WP Cloud Files: Failed to generate {$sizeName} thumbnail for document {$attachmentId}");
-                }
                 continue;
             }
             
-            // Create a filename for the thumbnail
-            $originalFilename = pathinfo($filePath, PATHINFO_FILENAME);
             $thumbnailFilename = "{$originalFilename}-{$sizeName}.jpg";
             $thumbnailDestPath = "{$attachmentDir}/{$thumbnailFilename}";
             
-            // Move the temporary thumbnail to the uploads directory
             if (rename($thumbnailPath, $thumbnailDestPath)) {
-                // Add this size to the metadata
-                $dimensions = getimagesize($thumbnailDestPath);
-                $metadata['sizes'][$sizeName] = [
-                    'file' => $thumbnailFilename,
-                    'width' => $dimensions[0],
-                    'height' => $dimensions[1],
-                    'mime-type' => 'image/jpeg',
-                ];
-                
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log("WP Cloud Files: Generated {$sizeName} thumbnail for document {$attachmentId}");
+                $imgDimensions = getimagesize($thumbnailDestPath);
+                if ($imgDimensions) {
+                    $metadata['sizes'][$sizeName] = [
+                        'file'      => $thumbnailFilename,
+                        'width'     => $imgDimensions[0],
+                        'height'    => $imgDimensions[1],
+                        'mime-type' => 'image/jpeg',
+                    ];
+                    
+                    // WordPress expects filesize for full size previews
+                    if ($sizeName === 'full') {
+                        $metadata['sizes'][$sizeName]['filesize'] = filesize($thumbnailDestPath);
+                    }
                 }
             } else {
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log("WP Cloud Files: Failed to move thumbnail to {$thumbnailDestPath}");
-                }
-                
-                // Clean up if move failed
-                if (file_exists($thumbnailPath)) {
-                    unlink($thumbnailPath);
-                }
+                @unlink($thumbnailPath);
             }
         }
+        
+        return $metadata;
     }
     
     /**
-     * Prepare attachment data for JavaScript
-     * This ensures document thumbnails appear in the media library
+     * Get image sizes to generate, including 'full' for media library preview.
+     */
+    private function getImageSizes(): array
+    {
+        return [
+            'full' => [
+                'width'  => 1500,
+                'height' => 1500,
+            ],
+            'thumbnail' => [
+                'width'  => (int) get_option('thumbnail_size_w', 150),
+                'height' => (int) get_option('thumbnail_size_h', 150),
+            ],
+            'medium' => [
+                'width'  => (int) get_option('medium_size_w', 300),
+                'height' => (int) get_option('medium_size_h', 300),
+            ],
+            'large' => [
+                'width'  => (int) get_option('large_size_w', 1024),
+                'height' => (int) get_option('large_size_h', 1024),
+            ],
+        ];
+    }
+    
+    /**
+     * Prepare attachment data for JavaScript.
+     * Ensures document thumbnails appear in the media library.
      */
     public function prepareAttachmentForJs($response, $attachment, $meta)
     {
-        // Check if this is a document with thumbnail
-        if (!empty($meta['sizes']) && in_array($attachment->post_mime_type, $this->documentTypes)) {
-            $uploads = wp_upload_dir();
-            
-            // Add thumbnail URLs to the response
-            foreach (['thumbnail', 'medium', 'large'] as $size) {
-                if (!empty($meta['sizes'][$size])) {
-                    // Get the attachment URL base
-                    $fileUrl = wp_get_attachment_url($attachment->ID);
-                    $filePath = get_attached_file($attachment->ID);
-                    $baseUrl = dirname($fileUrl);
-                    
-                    // Set the thumbnail URL
-                    // This will be rewritten by the S3 URL rewriter later
-                    $response['sizes'][$size] = [
-                        'url' => $baseUrl . '/' . $meta['sizes'][$size]['file'],
-                        'width' => $meta['sizes'][$size]['width'],
-                        'height' => $meta['sizes'][$size]['height'],
-                    ];
-                    
-                    // If we're setting the thumbnail size, also set the icon
-                    if ($size === 'thumbnail') {
-                        $response['icon'] = $baseUrl . '/' . $meta['sizes'][$size]['file'];
-                    }
+        if (empty($meta['sizes']) || !in_array($attachment->post_mime_type, $this->documentTypes, true)) {
+            return $response;
+        }
+        
+        $fileUrl = wp_get_attachment_url($attachment->ID);
+        $baseUrl = dirname($fileUrl);
+        
+        foreach (['full', 'thumbnail', 'medium', 'large'] as $size) {
+            if (!empty($meta['sizes'][$size])) {
+                $response['sizes'][$size] = [
+                    'url'    => $baseUrl . '/' . $meta['sizes'][$size]['file'],
+                    'width'  => $meta['sizes'][$size]['width'],
+                    'height' => $meta['sizes'][$size]['height'],
+                ];
+                
+                if ($size === 'thumbnail') {
+                    $response['icon'] = $baseUrl . '/' . $meta['sizes'][$size]['file'];
                 }
             }
         }

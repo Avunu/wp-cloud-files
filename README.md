@@ -58,19 +58,19 @@ To migrate your existing media library to S3, use the WP-CLI command:
 
 ```bash
 # Migrate all media files to S3
-wp s3uploads migrate
+wp wp-cloud-files migrate
 
 # Migrate and keep local copies
-wp s3uploads migrate --keep-local
+wp wp-cloud-files migrate --keep-local
 
 # Migrate 50 files starting from item 100
-wp s3uploads migrate --limit=50 --offset=100
+wp wp-cloud-files migrate --limit=50 --offset=100
 
 # Force re-upload of all media
-wp s3uploads migrate --force
+wp wp-cloud-files migrate --force
 
 # Process in smaller batches (default is 20)
-wp s3uploads migrate --batch-size=10
+wp wp-cloud-files migrate --batch-size=10
 ```
 
 ### Document Thumbnails
