@@ -21,7 +21,20 @@ WP Cloud Files is a WordPress plugin that seamlessly integrates your WordPress m
 
 ## Installation
 
-1. Download the plugin and upload it to your `/wp-content/plugins/` directory
+### Recommended: install the release zip
+
+1. Download `wp-cloud-files.zip` from the [latest GitHub Release](https://github.com/Avunu/wp-cloud-files/releases/latest)
+2. In WordPress, go to **Plugins → Add New → Upload Plugin** and upload the zip
+3. Define the required constants in your `wp-config.php` file (see Configuration section)
+4. Activate the plugin through the WordPress admin interface
+
+The release zip bundles all Composer dependencies, so there is no separate `composer install`
+step. Once installed, the plugin checks GitHub for new releases and offers one-click updates
+through the normal WordPress Plugins screen.
+
+### From source (development)
+
+1. Clone the repository into your `/wp-content/plugins/` directory
 2. Run `composer install` in the plugin directory to install dependencies
 3. Define the required constants in your `wp-config.php` file (see Configuration section)
 4. Activate the plugin through the WordPress admin interface
@@ -89,6 +102,27 @@ These thumbnails will appear in the WordPress media library just like image thum
 2. Files are then uploaded to your S3 bucket with public read permissions
 3. Local files are removed to save disk space
 4. All URLs are automatically rewritten to point to your S3 bucket
+
+## Releasing
+
+Releases are cut from the Nix dev shell (`devenv shell` / `direnv allow`) with a single command:
+
+```bash
+release patch   # 0.0.2 -> 0.0.3
+release minor   # 0.0.x -> 0.1.0
+release major   # 0.x.y -> 1.0.0
+release 1.2.0   # set an explicit version
+```
+
+The `release` script bumps the version in both `index.php` and `composer.json`, commits, tags,
+and pushes (`git push --follow-tags`). Pushing the tag triggers the
+[Release workflow](.github/workflows/release.yml), which builds the plugin on a Nix runner,
+produces `wp-cloud-files.zip` (with `vendor/` bundled), and publishes a GitHub Release with
+auto-generated notes. Client sites pick up the new version automatically via
+[plugin-update-checker](https://github.com/YahnisElsts/plugin-update-checker).
+
+Pre-flight checks: the command refuses to run unless the working tree is clean, you're on
+`main`, and `main` is in sync with `origin`.
 
 ## Support
 

@@ -29,6 +29,19 @@ if (file_exists($composerAutoloader)) {
     return; // Stop plugin initialization if dependencies are missing
 }
 
+// Self-update from GitHub releases. Registered before the S3-constant gate so
+// updates work even when the plugin isn't yet configured. The built zip attached
+// to each release bundles vendor/, so end users never need Composer.
+require_once __DIR__ . '/vendor/yahnis-elsts/plugin-update-checker/plugin-update-checker.php';
+
+$wpcfUpdateChecker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+    'https://github.com/Avunu/wp-cloud-files/',
+    __FILE__,
+    'wp-cloud-files'
+);
+// Download the built release asset, not GitHub's source tarball (which lacks vendor/).
+$wpcfUpdateChecker->getVcsApi()->enableReleaseAssets('/wp-cloud-files\.zip$/');
+
 // Load autoloader
 spl_autoload_register(function ($class) {
     if (str_starts_with($class, 'Avunu\\WPCloudFiles\\')) {

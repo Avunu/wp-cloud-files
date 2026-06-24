@@ -1,3 +1,5 @@
 vendor
 .devenv
 .direnv
+result
+wp-cloud-files.zip
