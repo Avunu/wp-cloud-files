@@ -107,9 +107,10 @@
           pkgs    = pkgsFor system;
           php     = pkgs.php83;
           inherit (pkgs) lib stdenvNoCC;
+          composerData = builtins.fromJSON (builtins.readFile ./composer.json);
 
-          pname   = "wp-cloud-files";
-          version = "1.0.0";
+          pname   = composerData.name;
+          version = composerData.version;
           src     = self;
 
           # -------------------------------------------------------------- #
@@ -154,8 +155,8 @@
             '';
 
             meta = {
-              description = "Maintenance build of the WP Cloud Files WordPress plugin";
-              license     = lib.licenses.isc;
+              description = composerData.description;
+              license     = lib.licenses.gpl3;
               platforms   = lib.platforms.all;
             };
           };
