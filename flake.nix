@@ -31,7 +31,6 @@
                 packages = with pkgs; [
                   wp-cli
                   php83.packages.composer
-                  jq
                 ];
 
                 languages.php = {
@@ -96,67 +95,6 @@
                   echo "✅ Setup complete! Run 'devenv up' to start services."
                 '';
 
-                # ---------------------------------------------------------------- #
-                # Release: bump version, tag, and push (CI builds & publishes)      #
-                # Usage: release <patch|minor|major|X.Y.Z>                          #
-                # ---------------------------------------------------------------- #
-                scripts.release.exec = ''
-                  set -euo pipefail
-
-                  bump="''${1:-}"
-                  if [ -z "$bump" ]; then
-                    echo "usage: release <patch|minor|major|X.Y.Z>" >&2
-                    exit 1
-                  fi
-
-                  # Pre-flight: clean tree, on main, in sync with origin.
-                  if [ -n "$(git status --porcelain)" ]; then
-                    echo "❌ Working tree is not clean. Commit or stash first." >&2
-                    exit 1
-                  fi
-                  branch="$(git rev-parse --abbrev-ref HEAD)"
-                  if [ "$branch" != "main" ]; then
-                    echo "❌ Not on main (on '$branch')." >&2
-                    exit 1
-                  fi
-                  git fetch --quiet origin
-                  if [ "$(git rev-parse @)" != "$(git rev-parse @{u})" ]; then
-                    echo "❌ Local main is not in sync with origin. Pull/push first." >&2
-                    exit 1
-                  fi
-
-                  cur="$(grep -oP 'Version:\s*\K[0-9]+\.[0-9]+\.[0-9]+' index.php | head -1)"
-                  if [ -z "$cur" ]; then
-                    echo "❌ Could not read current version from index.php header." >&2
-                    exit 1
-                  fi
-                  IFS=. read -r MA MI PA <<< "$cur"
-
-                  case "$bump" in
-                    major) new="$((MA + 1)).0.0" ;;
-                    minor) new="$MA.$((MI + 1)).0" ;;
-                    patch) new="$MA.$MI.$((PA + 1))" ;;
-                    [0-9]*.[0-9]*.[0-9]*) new="$bump" ;;
-                    *) echo "❌ Invalid bump: '$bump' (use patch|minor|major|X.Y.Z)" >&2; exit 1 ;;
-                  esac
-
-                  if git rev-parse -q --verify "refs/tags/$new" >/dev/null; then
-                    echo "❌ Tag '$new' already exists." >&2
-                    exit 1
-                  fi
-
-                  echo "🔖 Releasing $cur -> $new"
-                  sed -i -E "s/(Version:[[:space:]]*).*/\1$new/" index.php
-                  jq --arg v "$new" '.version = $v' composer.json > composer.json.tmp
-                  mv composer.json.tmp composer.json
-
-                  git add index.php composer.json
-                  git commit -m "chore: release $new"
-                  git tag "$new"
-                  git push --follow-tags
-                  echo "🚀 Pushed $new. GitHub Actions will build and publish the release."
-                '';
-
                 env.WP_CLI = "${pkgs.wp-cli}/bin/wp";
               } )
             ];
@@ -212,6 +150,11 @@
               # -L dereferences: composition-c4 installs vendor/ as symlinks into the
               # Nix store; the distributable plugin must contain real, self-contained files.
               cp -rL src vendor "$pluginDir/"
+
+              # Stamp the WordPress plugin header version from composer.json, which is the
+              # single source of truth (Release Please bumps it). WordPress and the update
+              # checker read this header to detect new versions.
+              sed -i -E "s|^([[:space:]]*\* Version:[[:space:]]*).*|\1${version}|" "$pluginDir/index.php"
 
               runHook postInstall
             '';

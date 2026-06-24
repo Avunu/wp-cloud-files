@@ -105,24 +105,34 @@ These thumbnails will appear in the WordPress media library just like image thum
 
 ## Releasing
 
-Releases are cut from the Nix dev shell (`devenv shell` / `direnv allow`) with a single command:
+Releases are fully automated from [Conventional Commits](https://www.conventionalcommits.org/)
+via [Release Please](https://github.com/googleapis/release-please). There is no manual version
+bump — just write conventional commit messages:
 
-```bash
-release patch   # 0.0.2 -> 0.0.3
-release minor   # 0.0.x -> 0.1.0
-release major   # 0.x.y -> 1.0.0
-release 1.2.0   # set an explicit version
-```
+- `fix: ...` → patch release (0.0.x)
+- `feat: ...` → minor release (0.x.0)
+- `feat!: ...` or a `BREAKING CHANGE:` footer → major release (x.0.0)
+- `chore: ...`, `docs: ...`, `refactor: ...` → no release on their own
 
-The `release` script bumps the version in both `index.php` and `composer.json`, commits, tags,
-and pushes (`git push --follow-tags`). Pushing the tag triggers the
-[Release workflow](.github/workflows/release.yml), which builds the plugin on a Nix runner,
-produces `wp-cloud-files.zip` (with `vendor/` bundled), and publishes a GitHub Release with
-auto-generated notes. Client sites pick up the new version automatically via
+On every push to `main`, the [Release workflow](.github/workflows/release.yml) opens (or updates)
+a **release PR** that accumulates the pending changes and previews the next version + changelog.
+Merging that PR:
+
+1. bumps the version in `composer.json` (and the root `VERSION` file) and updates `CHANGELOG.md`;
+2. creates the git tag and a GitHub Release with notes generated from the commits;
+3. builds the plugin on a Nix runner (`nix build .#zip`) and attaches `wp-cloud-files.zip`
+   (with `vendor/` bundled) as the release asset.
+
+Client sites then pick up the new version automatically via
 [plugin-update-checker](https://github.com/YahnisElsts/plugin-update-checker).
 
-Pre-flight checks: the command refuses to run unless the working tree is clean, you're on
-`main`, and `main` is in sync with `origin`.
+The version in the `index.php` plugin header is stamped from `composer.json` at build time, so
+`composer.json` is the single source of truth. (A from-source/dev checkout may show a stale
+header version until built — the published zip is always correct.)
+
+> **Repo setting:** Settings → Actions → General → Workflow permissions must allow
+> "Read and write permissions" and "Allow GitHub Actions to create and approve pull requests"
+> so Release Please can open the release PR.
 
 ## Support
 

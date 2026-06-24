@@ -1,32 +1,46 @@
 name: Release
 
-# Triggered by the `release` dev script pushing a semver tag (e.g. 0.0.3).
+# Release Please maintains a release PR from Conventional Commits on main.
+# Merging that PR bumps composer.json + VERSION + CHANGELOG.md, creates the tag
+# and GitHub Release (with auto-generated notes), then this job builds the plugin
+# zip with Nix and attaches it as the release asset that client sites self-update
+# from via plugin-update-checker.
 on:
   push:
-    tags:
-      - "*.*.*"
+    branches:
+      - main
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
+      - name: Release Please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Uses release-please-config.json + .release-please-manifest.json.
+
+      # The remaining steps run only when a release was actually created
+      # (i.e. the release PR was merged). The root package uses unprefixed outputs.
       - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.release_created }}
 
       - uses: DeterminateSystems/nix-installer-action@main
+        if: ${{ steps.release.outputs.release_created }}
 
-      # Builds vendor/ with Nix and produces result/wp-cloud-files.zip.
-      - run: nix build .#zip -L
+      - name: Build plugin zip
+        if: ${{ steps.release.outputs.release_created }}
+        run: nix build .#zip -L
 
-      # Create the GitHub Release for this tag and attach the built zip.
-      # plugin-update-checker on client sites downloads this asset to self-update.
-      - name: Publish release
+      - name: Attach zip to release
+        if: ${{ steps.release.outputs.release_created }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            result/wp-cloud-files.zip \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
+          gh release upload "${{ steps.release.outputs.tag_name }}" \
+            result/wp-cloud-files.zip --clobber
