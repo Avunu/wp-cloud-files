@@ -47,6 +47,10 @@ class Plugin
         if (self::directUploadsEnabled()) {
             add_action('rest_api_init', [new RestController(), 'register']);
             add_action('admin_enqueue_scripts', [$this, 'enqueueDirectUploadScript'], 100);
+
+            // Advertise the S3 ceiling instead of the PHP limit, so the uploader
+            // UI is accurate and Plupload doesn't reject large files client-side.
+            add_filter('upload_size_limit', [$this, 'filterUploadSizeLimit']);
         }
         
         // // Handle image editing (in case it bypasses normal upload flow)
@@ -70,6 +74,26 @@ class Plugin
         return (defined('S3_DIRECT_UPLOAD_MIN_SIZE') && S3_DIRECT_UPLOAD_MIN_SIZE)
             ? (int) S3_DIRECT_UPLOAD_MIN_SIZE
             : 0;
+    }
+
+    private static function directUploadMaxSize(): int
+    {
+        return (defined('S3_MAX_UPLOAD_SIZE') && S3_MAX_UPLOAD_SIZE)
+            ? (int) S3_MAX_UPLOAD_SIZE
+            : 5 * 1024 * 1024 * 1024; // 5 GiB — common single-PUT ceiling
+    }
+
+    /**
+     * Raise the advertised upload limit to the S3 direct-upload ceiling. Fixes
+     * both the "Maximum upload file size" UI text and Plupload's client-side
+     * max_file_size check (which would otherwise reject large files before our
+     * JS can intercept them). Never lowers a higher pre-existing limit.
+     *
+     * @param int $size Current limit (min of upload_max_filesize / post_max_size).
+     */
+    public function filterUploadSizeLimit($size): int
+    {
+        return max((int) $size, self::directUploadMaxSize());
     }
 
     /**

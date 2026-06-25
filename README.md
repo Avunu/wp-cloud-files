@@ -63,6 +63,7 @@ define('S3_ROOT', '');            // Subfolder within bucket to use as root (opt
 // Direct browser-to-S3 uploads (optional, opt-in)
 define('S3_DIRECT_UPLOADS', true);        // Enable direct uploads. REQUIRES bucket CORS (see below)
 define('S3_DIRECT_UPLOAD_MIN_SIZE', 0);   // Min bytes to route direct; 0 = all uploads (default)
+define('S3_MAX_UPLOAD_SIZE', 5368709120); // Advertised max upload size in bytes (default 5 GiB)
 define('S3_UPLOAD_ACL', 'public-read');   // Sign this ACL on the PUT. Omit for public buckets / R2
 define('S3_PRESIGN_EXPIRES', '+15 minutes'); // Presigned URL lifetime (default '+15 minutes')
 ```
