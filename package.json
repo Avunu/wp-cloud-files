@@ -3,10 +3,11 @@
   "private": true,
   "description": "Type-checking tooling for the WP Cloud Files browser assets. No build step — the shipped JS in assets/js is plain, type-checked JavaScript.",
   "scripts": {
-    "check:types": "tsc --noEmit"
+    "check:types": "tsc --noEmit",
+    "upgrade": "npx npm-check-updates -u && npm install"
   },
   "devDependencies": {
     "@types/underscore": "^1.13.0",
-    "typescript": "^5.7.0"
+    "typescript": "^6.0.3"
   }
 }
