@@ -5,7 +5,8 @@
   "packages": {
     ".": {
       "release-type": "php",
-      "package-name": "wp-cloud-files"
+      "package-name": "wp-cloud-files",
+      "extra-files": ["index.php"]
     }
   }
 }
