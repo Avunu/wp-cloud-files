@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/Avunu/wp-cloud-files/compare/v0.2.1...v0.3.0) (2026-06-25)
+
+
+### Features
+
+* Advertise the S3 ceiling instead of the PHP limit ([30676cd](https://github.com/Avunu/wp-cloud-files/commit/30676cd8ab26fb7098982e99ab1aac2d7ada5776))
+* migrate urls wp-cli command ([607d46a](https://github.com/Avunu/wp-cloud-files/commit/607d46aa13421b328b5280b7bfb25eee57dc2904))
+
+
+### Bug Fixes
+
+* handle plugin uploads ([b1b69b2](https://github.com/Avunu/wp-cloud-files/commit/b1b69b2ef1b42da38e476646763e42ef67db8a94))
+
 ## [0.2.1](https://github.com/Avunu/wp-cloud-files/compare/v0.2.0...v0.2.1) (2026-06-25)
 
 
