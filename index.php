@@ -4,7 +4,7 @@
  * Plugin URI: https://avunu.io/
  * Description: Use S3 for WordPress uploads. This plugin moves uploaded files to S3 and redirects request to them from there.
  * x-release-please-start-version
- * Version: 0.3.0
+ * Version: 0.3.1
  * x-release-please-end
  * Author: Avunu
  * Author URI: https://avunu.io/
