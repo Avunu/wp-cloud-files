@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.1](https://github.com/Avunu/wp-cloud-files/compare/v0.2.0...v0.2.1) (2026-06-25)
+
+
+### Miscellaneous Chores
+
+* dependabot config ([f583cc3](https://github.com/Avunu/wp-cloud-files/commit/f583cc3a4cfa897502fccbb4c626fb911e2d9168))
+* **deps:** bump actions/checkout from 4 to 7 ([8b897ec](https://github.com/Avunu/wp-cloud-files/commit/8b897ec4031947e042d62a811f8718a55219dab5))
+* **deps:** bump actions/checkout from 4 to 7 ([0674572](https://github.com/Avunu/wp-cloud-files/commit/067457286d5928b7b41b61d6beaebc7e33c565e0))
+* **deps:** bump googleapis/release-please-action from 4 to 5 ([a93224e](https://github.com/Avunu/wp-cloud-files/commit/a93224eb706dcacad564211b82c86b3797883e28))
+* **deps:** bump googleapis/release-please-action from 4 to 5 ([91626a2](https://github.com/Avunu/wp-cloud-files/commit/91626a240841620f4d8a441ca414ee0687636ba0))
+* fix the release tag syntax to be compatible with plugin-update-checker ([28f3c6d](https://github.com/Avunu/wp-cloud-files/commit/28f3c6d2a58fa42c1d7e0999c6f4910f1854b195))
+* update npm deps ([eefa266](https://github.com/Avunu/wp-cloud-files/commit/eefa2668aa6f7724fb3e8a4ccfdb1bc84b339a1a))
+
 ## [0.2.0](https://github.com/Avunu/wp-cloud-files/compare/wp-cloud-files-0.1.0...wp-cloud-files-0.2.0) (2026-06-25)
 
 
