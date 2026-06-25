@@ -631,4 +631,95 @@ class CLI
             $stats['skipped']
         ));
     }
+
+    /**
+     * Rewrite local upload URLs in the database to their S3 public URLs.
+     *
+     * A convenience wrapper around `wp search-replace` that fills in the local
+     * uploads base URL and the configured S3 public URL (including S3_ROOT) for
+     * you. Useful after migrating an existing library to S3 so hard-coded upload
+     * URLs in post content, meta, and options point at the bucket. The
+     * replacement is serialization-safe because it delegates to `wp search-replace`.
+     *
+     * ## OPTIONS
+     *
+     * [<table>...]
+     * : Limit the replacement to specific tables. Defaults to the standard tables.
+     *
+     * [--dry-run]
+     * : Show what would be changed without touching the database.
+     *
+     * [--precise]
+     * : Force the use of PHP (instead of SQL) for the replacement.
+     *
+     * [--all-tables]
+     * : Search/replace through all tables registered to $wpdb, not just core tables.
+     *
+     * [--all-tables-with-prefix]
+     * : Search/replace through all tables that share the table prefix.
+     *
+     * [--network]
+     * : Search/replace through all the tables in a multisite network.
+     *
+     * [--<field>=<value>]
+     * : Any other flag is passed straight through to `wp search-replace`.
+     *
+     * ## EXAMPLES
+     *
+     *     # Preview the changes first
+     *     $ wp wp-cloud-files migrate-urls --dry-run
+     *
+     *     # Rewrite upload URLs across the database
+     *     $ wp wp-cloud-files migrate-urls
+     *
+     *     # Limit to post content and meta
+     *     $ wp wp-cloud-files migrate-urls wp_posts wp_postmeta
+     *
+     * @param array $args
+     * @param array $assoc_args
+     */
+    public function migrate_urls($args, $assoc_args)
+    {
+        if (!defined('S3_PUBLIC_URL') || !S3_PUBLIC_URL) {
+            WP_CLI::error('S3_PUBLIC_URL is not defined. Configure the plugin before migrating URLs.');
+            return;
+        }
+
+        $uploads = wp_upload_dir();
+        $from = trailingslashit($uploads['baseurl']);
+        $to = S3Client::getInstance()->getPublicUrl('');
+
+        if ($from === $to) {
+            WP_CLI::warning('Local uploads URL and S3 public URL are identical; nothing to do.');
+            return;
+        }
+
+        $isDryRun = isset($assoc_args['dry-run']);
+
+        if (!$isDryRun) {
+            WP_CLI::confirm(
+                sprintf('Replace "%s" with "%s" across the database?', $from, $to),
+                $assoc_args
+            );
+        }
+
+        // --yes is consumed by confirm() above; search-replace does not accept it.
+        unset($assoc_args['yes']);
+
+        // Build the search-replace invocation, forwarding tables and flags.
+        $parts = array_map('escapeshellarg', array_merge([$from, $to], $args));
+
+        foreach ($assoc_args as $key => $value) {
+            if ($value === true) {
+                $parts[] = '--' . $key;
+            } else {
+                $parts[] = '--' . $key . '=' . escapeshellarg((string) $value);
+            }
+        }
+
+        $command = 'search-replace ' . implode(' ', $parts);
+
+        WP_CLI::log(sprintf('Running: wp %s', $command));
+        WP_CLI::runcommand($command, ['launch' => false, 'exit_error' => true]);
+    }
 }
