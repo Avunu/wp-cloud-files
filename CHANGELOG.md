@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/Avunu/wp-cloud-files/compare/wp-cloud-files-0.1.0...wp-cloud-files-0.2.0) (2026-06-25)
+
+
+### Features
+
+* direct s3 uploads ([ef3e2ab](https://github.com/Avunu/wp-cloud-files/commit/ef3e2abb78f1d77c1a44ef9b6dc483582d67ebf9))
+
 ## [0.1.0](https://github.com/Avunu/wp-cloud-files/compare/wp-cloud-files-0.0.2...wp-cloud-files-0.1.0) (2026-06-24)
 
 
