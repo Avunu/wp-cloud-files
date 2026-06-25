@@ -164,9 +164,15 @@ class MediaHandler
      */
     public function handleDeletion(int $attachmentId): void
     {
+        // Returns false for attachments without stored metadata (e.g. plugin/theme
+        // package uploads cleaned up by File_Upload_Upgrader); normalize to array.
         $metadata = wp_get_attachment_metadata($attachmentId);
+        if (!is_array($metadata)) {
+            $metadata = [];
+        }
+
         $s3Client = S3Client::getInstance();
-        
+
         // Get file path - either from metadata or directly from attachment
         $mainFilePath = $this->getOriginalFilePath($metadata, $attachmentId);
         
