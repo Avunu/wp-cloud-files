@@ -27,7 +27,7 @@ jobs:
 
       # The remaining steps run only when a release was actually created
       # (i.e. the release PR was merged). The root package uses unprefixed outputs.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: ${{ steps.release.outputs.release_created }}
 
       - uses: DeterminateSystems/nix-installer-action@main
