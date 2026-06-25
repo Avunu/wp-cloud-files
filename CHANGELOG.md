@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/Avunu/wp-cloud-files/compare/v0.3.0...v0.3.1) (2026-06-25)
+
+
+### Miscellaneous Chores
+
+* proper release encoding in index.php ([4459a92](https://github.com/Avunu/wp-cloud-files/commit/4459a924c45176a6d8765b31b1dec5e8abd23075))
+
 ## [0.3.0](https://github.com/Avunu/wp-cloud-files/compare/v0.2.1...v0.3.0) (2026-06-25)
 
 
