@@ -149,7 +149,8 @@
               cp index.php README.md LICENSE "$pluginDir/"
               # -L dereferences: composition-c4 installs vendor/ as symlinks into the
               # Nix store; the distributable plugin must contain real, self-contained files.
-              cp -rL src vendor "$pluginDir/"
+              # assets/ holds the browser JS (plain, type-checked but not compiled).
+              cp -rL src vendor assets "$pluginDir/"
 
               # Stamp the WordPress plugin header version from composer.json, which is the
               # single source of truth (Release Please bumps it). WordPress and the update

@@ -44,8 +44,9 @@ $wpcfUpdateChecker->getVcsApi()->enableReleaseAssets('/wp-cloud-files\.zip$/');
 
 // Load autoloader
 spl_autoload_register(function ($class) {
-    if (str_starts_with($class, 'Avunu\\WPCloudFiles\\')) {
-        $file = __DIR__ . '/src/' . str_replace('\\', '/', substr($class, 15)) . '.php';
+    $prefix = 'Avunu\\WPCloudFiles\\';
+    if (str_starts_with($class, $prefix)) {
+        $file = __DIR__ . '/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
         if (file_exists($file)) {
             require $file;
         }
