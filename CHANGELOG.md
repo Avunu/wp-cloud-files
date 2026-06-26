@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/Avunu/wp-cloud-files/compare/v0.3.1...v0.3.2) (2026-06-26)
+
+
+### Miscellaneous Chores
+
+* update deps ([4eb2d4a](https://github.com/Avunu/wp-cloud-files/commit/4eb2d4a03eea5a42a680ad0f14038bfb985185e1))
+* update deps script ([f228803](https://github.com/Avunu/wp-cloud-files/commit/f228803066ec134473a2ead0fc01db47970eddb2))
+
 ## [0.3.1](https://github.com/Avunu/wp-cloud-files/compare/v0.3.0...v0.3.1) (2026-06-25)
 
 
