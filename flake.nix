@@ -1,25 +1,42 @@
 {
   description = "WP Cloud Files WordPress plugin";
- 
+
   inputs = {
-    nixpkgs.url        = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     composition-c4.url = "github:fossar/composition-c4";
-    devenv.url         = "github:cachix/devenv";
+    devenv.url = "github:cachix/devenv";
   };
- 
-  outputs = { self, nixpkgs, composition-c4, devenv, ... } @ inputs:
+
+  outputs =
+    {
+      self,
+      nixpkgs,
+      composition-c4,
+      devenv,
+      ...
+    }@inputs:
     let
-      systems      = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
- 
-      pkgsFor = system: import nixpkgs {
-        inherit system;
-        overlays = [ composition-c4.overlays.default ];
-      };
+
+      pkgsFor =
+        system:
+        import nixpkgs {
+          inherit system;
+          overlays = [ composition-c4.overlays.default ];
+        };
     in
     {
-      devShells = forAllSystems (system:
-        let pkgs = pkgsFor system; in
+      devShells = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
         {
           # ---------------------------------------------------------------- #
           # Development shell: devenv-managed environment                    #
@@ -27,91 +44,120 @@
           default = devenv.lib.mkShell {
             inherit pkgs inputs;
             modules = [
-              ( { pkgs, lib, config, ... }: {
-                packages = with pkgs; [
-                  wp-cli
-                  php83.packages.composer
-                ];
+              (
+                {
+                  pkgs,
+                  lib,
+                  config,
+                  ...
+                }:
+                {
+                  packages = with pkgs; [
+                    wp-cli
+                    php83.packages.composer
+                  ];
 
-                languages.php = {
-                  enable = true;
-                  package = pkgs.php83;
-                  extensions = [ "mysqli" "pdo_mysql" "gd" "intl" "zip" "openssl" ];
-                  fpm.pools.php = {
-                    settings = {
-                      "pm" = "dynamic";
-                      "pm.max_children" = 5;
-                      "pm.start_servers" = 2;
-                      "pm.min_spare_servers" = 1;
-                      "pm.max_spare_servers" = 3;
+                  languages.php = {
+                    enable = true;
+                    package = pkgs.php83;
+                    extensions = [
+                      "mysqli"
+                      "pdo_mysql"
+                      "gd"
+                      "intl"
+                      "zip"
+                      "openssl"
+                    ];
+                    fpm.pools.php = {
+                      settings = {
+                        "pm" = "dynamic";
+                        "pm.max_children" = 5;
+                        "pm.start_servers" = 2;
+                        "pm.min_spare_servers" = 1;
+                        "pm.max_spare_servers" = 3;
+                      };
                     };
                   };
-                };
 
-                services.mysql = {
-                  enable = true;
-                  package = pkgs.mariadb;
-                  initialDatabases = [
-                    { name = "wordpress_dev"; }
-                  ];
-                };
+                  services.mysql = {
+                    enable = true;
+                    package = pkgs.mariadb;
+                    initialDatabases = [
+                      { name = "wordpress_dev"; }
+                    ];
+                  };
 
-                services.caddy = {
-                  enable = true;
-                  config = ''
-                    http://localhost:8002 {
-                      root * ./vendor/johnpbloch/wordpress-core
-                      php_fastcgi unix/${config.languages.php.fpm.pools.php.socket}
-                      file_server
-                    }
-                  '';
-                };
+                  services.caddy = {
+                    enable = true;
+                    config = ''
+                      http://localhost:8002 {
+                        root * ./vendor/johnpbloch/wordpress-core
+                        php_fastcgi unix/${config.languages.php.fpm.pools.php.socket}
+                        file_server
+                      }
+                    '';
+                  };
 
-                scripts.setup.exec = ''
-                  echo "🚀 Setting up WordPress development environment..."
+                  scripts = {
+                    setup.exec = ''
+                        echo "🚀 Setting up WordPress development environment..."
 
-                  # Install composer deps — places WordPress core at ./wordpress/
-                  composer install --no-interaction
+                      # Install composer deps — places WordPress core at ./wordpress/
+                      composer install --no-interaction
 
-                  # Configure WordPress
-                  if [ ! -f vendor/johnpbloch/wordpress-core/wp-config.php ]; then
-                    echo "📝 Creating wp-config.php..."
-                    wp config create \
-                      --path=vendor/johnpbloch/wordpress-core \
-                      --dbname=wordpress_dev \
-                      --dbuser=root \
-                      --dbhost=localhost \
-                      --extra-php <<PHP
-                      define( 'WP_HOME', 'http://localhost:8002' );
-                      define( 'WP_SITEURL', 'http://localhost:8002' );
-                      PHP
-                  fi
+                      # Configure WordPress
+                      if [ ! -f vendor/johnpbloch/wordpress-core/wp-config.php ]; then
+                        echo "📝 Creating wp-config.php..."
+                        wp config create \
+                          --path=vendor/johnpbloch/wordpress-core \
+                          --dbname=wordpress_dev \
+                          --dbuser=root \
+                          --dbhost=localhost \
+                          --extra-php <<PHP
+                          define( 'WP_HOME', 'http://localhost:8002' );
+                          define( 'WP_SITEURL', 'http://localhost:8002' );
+                          PHP
+                      fi
 
-                  # Symlink plugin into WordPress
-                  mkdir -p vendor/johnpbloch/wordpress-core/wp-content/plugins
-                  echo "🔗 Symlinking WP Cloud Files plugin..."
-                  ln -sfn "$(pwd)" vendor/johnpbloch/wordpress-core/wp-content/plugins/wp-cloud-files
+                      # Symlink plugin into WordPress
+                      mkdir -p vendor/johnpbloch/wordpress-core/wp-content/plugins
+                      echo "🔗 Symlinking WP Cloud Files plugin..."
+                      ln -sfn "$(pwd)" vendor/johnpbloch/wordpress-core/wp-content/plugins/wp-cloud-files
 
-                  echo "✅ Setup complete! Run 'devenv up' to start services."
-                '';
+                      echo "✅ Setup complete! Run 'devenv up' to start services."
+                    '';
+                    upgrade-deps.exec = ''
+                      echo "🔄 Upgrading composer dependencies..."
+                      composer update --no-interaction
+                      echo "✅ Dependencies upgraded."
+                      echo "🔄 Upgrading npm dependencies..."
+                      npm run upgrade
+                      echo "✅ npm dependencies upgraded."
+                      echo "🔄 Upgrading nix dependencies..."
+                      nix flake update
+                      echo "✅ nix dependencies upgraded."
+                    '';
+                  };
 
-                env.WP_CLI = "${pkgs.wp-cli}/bin/wp";
-              } )
+                  env.WP_CLI = "${pkgs.wp-cli}/bin/wp";
+                }
+              )
             ];
           };
         }
       );
 
-      packages = forAllSystems (system:
+      packages = forAllSystems (
+        system:
         let
-          pkgs    = pkgsFor system;
-          php     = pkgs.php83;
+          pkgs = pkgsFor system;
+          php = pkgs.php83;
           inherit (pkgs) lib stdenvNoCC;
           composerData = builtins.fromJSON (builtins.readFile ./composer.json);
 
-          pname   = "wp-cloud-files";
+          pname = "wp-cloud-files";
           version = composerData.version;
-          src     = self;
+          src = self;
 
           # -------------------------------------------------------------- #
           # PHP / Composer vendor dependencies                               #
@@ -126,7 +172,12 @@
           # Final plugin assembly                                            #
           # ---------------------------------------------------------------- #
           pluginPackage = stdenvNoCC.mkDerivation {
-            inherit pname version src composerDeps;
+            inherit
+              pname
+              version
+              src
+              composerDeps
+              ;
 
             nativeBuildInputs = [
               php
@@ -162,8 +213,8 @@
 
             meta = {
               description = composerData.description;
-              license     = lib.licenses.gpl3;
-              platforms   = lib.platforms.all;
+              license = lib.licenses.gpl3;
+              platforms = lib.platforms.all;
             };
           };
         in
