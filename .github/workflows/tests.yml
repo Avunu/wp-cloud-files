@@ -98,7 +98,7 @@ jobs:
             extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
 
       - name: Cache /nix/store
-        uses: nix-community/cache-nix-action@v6
+        uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-checks-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'tests/tools/composer.lock') }}
           restore-prefixes-first-match: nix-checks-${{ runner.os }}-
@@ -154,7 +154,7 @@ jobs:
             extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
 
       - name: Cache /nix/store
-        uses: nix-community/cache-nix-action@v6
+        uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-ci-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**') }}
           restore-prefixes-first-match: nix-ci-${{ runner.os }}-
