@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.4.0](https://github.com/Avunu/wp-cloud-files/compare/v0.3.2...v0.4.0) (2026-08-11)
+
+
+### Features
+
+* add CI test suite and gate releases on the declared WordPress version ([5f43409](https://github.com/Avunu/wp-cloud-files/commit/5f43409d14edcb90b538bb4285e40870276a1cde))
+
+
+### Bug Fixes
+
+* bind direct uploads to their presign, and resolve the remaining findings ([74bef3d](https://github.com/Avunu/wp-cloud-files/commit/74bef3d2ecf40d3223aa66a96802698ef5061a8b))
+* complete the TypeScript 7 migration ([3145d92](https://github.com/Avunu/wp-cloud-files/commit/3145d92908f854cd34f55a4cf510a25e5e59bfb9))
+* deleteFile reported failure whenever the object actually existed ([5298998](https://github.com/Avunu/wp-cloud-files/commit/5298998686d4950dd523c78f8332579d8ee731ea))
+
+
+### Miscellaneous Chores
+
+* add nix dependabot updates ([3e71b36](https://github.com/Avunu/wp-cloud-files/commit/3e71b3606cfa41a23d2b76cae91a8d1e6a0d44b6))
+* bump yoast/phpunit-polyfills ([df61cf0](https://github.com/Avunu/wp-cloud-files/commit/df61cf07a85913132b129d03ace320f9814f92d9))
+* bump yoast/phpunit-polyfills from 1.1.5 to 4.0.0 in /tests/tools in the test-tools group ([20f896d](https://github.com/Avunu/wp-cloud-files/commit/20f896dfa2939fda8652e6577ed75678247c3d7e))
+* **deps-dev:** bump typescript from 6.0.3 to 7.0.2 ([2c024fc](https://github.com/Avunu/wp-cloud-files/commit/2c024fc677ca87e2b1ba3957786c70fb28752d4a))
+* **deps-dev:** bump typescript from 6.0.3 to 7.0.2 ([28e43a4](https://github.com/Avunu/wp-cloud-files/commit/28e43a4dc0650c4479c9a2f73fc78b8e75ecc26c))
+* **deps:** bump actions/cache from 4 to 6 ([ba7dff9](https://github.com/Avunu/wp-cloud-files/commit/ba7dff976870c5c935ceb712335b23241db48358))
+* **deps:** bump actions/cache from 4 to 6 ([acca9ac](https://github.com/Avunu/wp-cloud-files/commit/acca9acc787eeb4b36a5b309d02c5a717dbc1db3))
+* **deps:** bump actions/setup-node from 4 to 7 ([7009eea](https://github.com/Avunu/wp-cloud-files/commit/7009eea9ac1b691da07478afa6f0920705f006c0))
+* **deps:** bump actions/setup-node from 4 to 7 ([aedf5d8](https://github.com/Avunu/wp-cloud-files/commit/aedf5d8a5d0fe9242259a636cba4f65699c0fa01))
+* **deps:** bump actions/upload-artifact from 4 to 7 ([c73ad52](https://github.com/Avunu/wp-cloud-files/commit/c73ad52bcce7766148ca2881938a9b5f81a356f0))
+* **deps:** bump actions/upload-artifact from 4 to 7 ([6b6c2e8](https://github.com/Avunu/wp-cloud-files/commit/6b6c2e8fc797356ec8956c2c790d5f926a387b41))
+* **deps:** bump nix-community/cache-nix-action from 6 to 7 ([5d0e328](https://github.com/Avunu/wp-cloud-files/commit/5d0e328a8021a0c7da1e75ad8258c798c4c67422))
+* **deps:** bump nix-community/cache-nix-action from 6 to 7 ([7e150e4](https://github.com/Avunu/wp-cloud-files/commit/7e150e47811958d43f4153410a122da4f1147c21))
+* update deps to PHP 8.3 ([5ebea68](https://github.com/Avunu/wp-cloud-files/commit/5ebea68b429889a4f5cd9d2e9b6917ed8fae0a9a))
+* update flake ([0a1625f](https://github.com/Avunu/wp-cloud-files/commit/0a1625f29a4f35c1e60b8dc15df998319f96d45d))
+
 ## [0.3.2](https://github.com/Avunu/wp-cloud-files/compare/v0.3.1...v0.3.2) (2026-06-26)
 
 
