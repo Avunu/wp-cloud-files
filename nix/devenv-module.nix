@@ -59,6 +59,14 @@ in
     };
   };
 
+  # Node is only ever used to type-check the browser JS (there is no build step),
+  # but pinning it here means `check:types` runs against the same toolchain
+  # locally and in CI rather than whatever node happens to be on $PATH.
+  languages.javascript = {
+    enable = true;
+    npm.enable = true;
+  };
+
   services.mysql = {
     enable = true;
     package = pkgs.mariadb;

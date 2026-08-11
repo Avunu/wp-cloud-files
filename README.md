@@ -41,6 +41,25 @@ through the normal WordPress Plugins screen.
 3. Define the required constants in your `wp-config.php` file (see Configuration section)
 4. Activate the plugin through the WordPress admin interface
 
+With Nix, `direnv allow` (or `nix develop --impure`) gives you PHP 8.3 with the
+right extensions, Composer, Node, MariaDB and MinIO. `setup` prepares a local
+WordPress; `devenv up` starts the services.
+
+### Tests
+
+```bash
+nix develop .#ci --impure --command devenv-flake-test   # everything
+WPCF_SUITES="unit" nix develop .#ci --impure --command devenv-flake-test
+nix build .#checks.x86_64-linux.phpstan -L              # also: phpcs, unit,
+                                                        # thumbnails, plugin-header
+```
+
+The browser JS has no build step — `npm run check:types` type-checks it in
+place. Note that TypeScript 7 ships as a native binary and provides only `tsc`,
+with no `tsserver`: editors need their own bundled TypeScript (the default) or
+the TypeScript Native Preview extension. Pointing your editor's TSDK at
+`node_modules/typescript/lib` will not work.
+
 ## Configuration
 
 Add the following constants to your `wp-config.php` file:

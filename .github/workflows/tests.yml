@@ -141,6 +141,9 @@ jobs:
         leg: ${{ fromJSON(needs.versions.outputs.legs) }}
     env:
       WP_VERSION: ${{ matrix.leg.wp }}
+      # The type check has its own job below, and it does not vary by WordPress
+      # version; running it in every matrix leg would just repeat `npm ci`.
+      WPCF_SUITES: unit thumbnails integration
     steps:
       - uses: actions/checkout@v7
 

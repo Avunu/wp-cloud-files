@@ -16,7 +16,7 @@ STATE="${DEVENV_STATE:-$ROOT/.devenv/state}"
 export TMPDIR="$STATE/test-tmp"
 mkdir -p "$TMPDIR"
 
-SUITES="${WPCF_SUITES:-unit thumbnails integration}"
+SUITES="${WPCF_SUITES:-types unit thumbnails integration}"
 PHPUNIT="$ROOT/tests/tools/vendor/bin/phpunit"
 
 status=0
@@ -44,6 +44,18 @@ ln -sfn "$ROOT" tests/.plugin-dir/wp-cloud-files
 
 for suite in $SUITES; do
     case "$suite" in
+        types)
+            # The browser JS has no build step, so tsc --noEmit is the only gate
+            # on it. TypeScript 7 ships as a native binary via optional platform
+            # packages, so `npm ci` is what puts the right one in place.
+            if [ -f package-lock.json ]; then
+                npm ci --silent
+                run npm run --silent check:types
+            else
+                echo "(no package-lock.json, skipping type check)"
+            fi
+            ;;
+
         unit)
             for profile in default root maxsize; do
                 run env WPCF_TEST_PROFILE="$profile" \
