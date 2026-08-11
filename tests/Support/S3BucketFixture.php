@@ -53,6 +53,11 @@ trait S3BucketFixture
         return S3Client::getInstance()->getFilesystem()->fileExists($key);
     }
 
+    protected function readObject(string $key): string
+    {
+        return S3Client::getInstance()->getFilesystem()->read($key);
+    }
+
     /** @return list<string> */
     protected function listObjects(): array
     {

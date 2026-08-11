@@ -12,6 +12,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/autoload.php';
 
+// Global class names, so not PSR-4 loadable. Harmless when unused: the plugin
+// only touches WP_CLI from src/CLI.php, and the WP_CLI *constant* is left
+// undefined so index.php's add_command() branch stays off.
+require_once dirname(__DIR__) . '/Support/wp-cli-double.php';
+
 $testsDir = getenv('WP_TESTS_DIR');
 
 if (!is_string($testsDir) || !is_file($testsDir . '/includes/functions.php')) {

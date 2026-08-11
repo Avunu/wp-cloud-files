@@ -67,6 +67,18 @@
     </rule>
 
     <!--
+        The WP-CLI double must reproduce upstream's names exactly to stand in for
+        them: the class really is called WP_CLI, and the progress bar really is
+        cli\progress\Bar. Both live in one file because they are one double.
+    -->
+    <rule ref="Squiz.Classes.ValidClassName">
+        <exclude-pattern>*/tests/Support/wp-cli-double.php</exclude-pattern>
+    </rule>
+    <rule ref="PSR1.Classes.ClassDeclaration">
+        <exclude-pattern>*/tests/Support/wp-cli-double.php</exclude-pattern>
+    </rule>
+
+    <!--
         The plugin talks to WordPress, whose hook callbacks and metadata arrays
         legitimately produce long lines; warn rather than fail on width.
     -->
