@@ -37,11 +37,27 @@ Now resolved as `dirname(__DIR__) . '/vendor/dompdf/dompdf'`. Test: `DocumentThu
 
 The hook checked `8.1` while the header and `composer.json` require `^8.3`. A PHP 8.2 site activated cleanly and then fatalled at runtime. Now checks `8.3`.
 
+### 5\. `deleteFile()` reported failure whenever the object existed — `src/S3Client.php`
+
+Flysystem's `Filesystem::delete()` returns `void`. Returning it straight from `deleteFile(): bool` yielded `null`, PHP raised a TypeError on the return type, and the method's own `catch (\Throwable)` swallowed it into `false` while logging an error.
+
+Exactly inverted: deleting an object that existed reported failure, deleting one that did not exist reported success. Found by PHPStan, then reproduced:
+
+```
+S3 Delete error: S3Client::deleteFile(): Return value must be of type bool, null returned
+```
+
+Tests: `tests/Integration/S3ClientTest.php`.
+
+### 6\. `enableReleaseAssets()` called on an untyped API — `index.php`
+
+`getVcsApi()` is typed as the base `Api`; `enableReleaseAssets()` only exists on the GitHub/GitLab implementations. Now behind an `instanceof` rather than assuming the repository URL never changes host.
+
 * * *
 
 ## Open — recommended for filing
 
-### 5\. PowerPoint thumbnails have never worked
+### 7\. PowerPoint thumbnails have never worked
 
 `src/DocumentThumbnailer.php`, `processPresentation()`
 
@@ -49,7 +65,7 @@ The method writes a `.pptx` and hands it to `Imagick::readImage($path . '[0]')`.
 
 _Fix:_ route presentations through the same PhpPresentation → PDF → raster path the Word branch uses, rather than handing Office XML to ImageMagick.
 
-### 6\. Any upload-capable user can claim any existing bucket object
+### 8\. Any upload-capable user can claim any existing bucket object
 
 `src/DirectUpload/RestController.php`, `createAttachment()`
 
@@ -57,7 +73,7 @@ Nothing ties the submitted `key` to a presign that _this_ user requested. A user
 
 _Fix:_ record issued presigns (user ID + key + expiry) in a transient and require a match in `createAttachment()`, or sign the key into an opaque token returned by `presign()`.
 
-### 7\. Unbounded collision loop in a synchronous request
+### 9\. Unbounded collision loop in a synchronous request
 
 `src/DirectUpload/RestController.php`, `uniqueKey()`
 
@@ -65,19 +81,19 @@ The `while` over `fileExists()` has no attempt cap. N colliding objects means N 
 
 _Fix:_ cap at ~100 attempts and fall back to a `uniqid()` suffix.
 
-### 8\. Over-eager size elision can skip uploads
+### 10\. Over-eager size elision can skip uploads
 
 `src/MediaHandler.php`, `shouldHaveModernFormats()` / size-requirement logic
 
 A required size is dropped when the original is smaller in **either** dimension, but WordPress generates a non-cropped size when the original is larger in **either** dimension. So `isMetadataComplete()` can return `true` while derivatives WordPress did generate never reach S3. Usually masked by the priority-999 hook re-running, which is why it has gone unnoticed.
 
-### 9\. `rewriteContentUrls()` is dead code that would break `S3_ROOT` sites
+### 11\. `rewriteContentUrls()` is dead code that would break `S3_ROOT` sites
 
 `src/Plugin.php:64` (hook commented out), `src/UrlRewriter.php`
 
 It uses raw `S3_PUBLIC_URL` instead of `getPublicUrl()`, so it ignores `S3_ROOT` and would emit 404ing URLs on any site that sets it. It also early-returns unless the content contains `<img`, so links, `<video>` and `<source>` would never be rewritten. Either fix all three issues before enabling it, or delete it.
 
-### 10\. Document thumbnails do 4× the necessary work
+### 12\. Document thumbnails do 4× the necessary work
 
 `src/ThumbnailHandler.php`, `handleDocumentThumbnails()` — and the same pattern in `src/CLI.php`, `regenerate_thumbnails()`.
 
@@ -85,8 +101,16 @@ The loop calls `generateThumbnail()` once per size, so a `.docx` is fully re-con
 
 * * *
 
+## Observations worth knowing
+
+### Signed `Content-Type` is not necessarily enforced
+
+`createPresignedPutUrl()` signs the Content-Type, but enforcement is the provider's choice. MinIO accepts a PUT whose Content-Type differs from the signed one and returns 200 (verified in `S3ClientTest`). The extension allowlist in `RestController::presign()` therefore constrains the *key*, not the bytes or the type the browser actually sends — which compounds finding 8.
+
+* * *
+
 ## Known coverage gaps
 
--   **`src/CLI.php` (725 lines) has no tests.** `CLI::migrate()` unlinks local files after upload and is the highest-consequence untested code in the repo. Needs a `WP_CLI` test double.
--   **No static analysis.** PHPStan and PHPCS are not wired up yet.
--   **`assets/js/direct-upload.js` is untested.** It is an IIFE with no exports, so it needs either a small refactor or a browser-driven test. `npm run check:types` now runs in CI, which is the cheap half.
+-   **`assets/js/direct-upload.js` is untested.** It is an IIFE with no exports, so it needs either a small refactor or a browser-driven test. `npm run check:types` runs in CI, which is the cheap half.
+-   **`CLI::migrate_urls()` is uncovered.** It ends in `WP_CLI::runcommand('search-replace …')`, so testing it meaningfully means asserting on the generated command string rather than its effect.
+-   **PHPStan runs at level 5**, with 7 baselined entries. Level 6 is a reasonable follow-up; most of the delta is one shared attachment-metadata array shape.
