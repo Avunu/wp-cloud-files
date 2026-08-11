@@ -5,7 +5,7 @@
     "require": {
         "php": "^8.3",
         "phpunit/phpunit": "^9.6",
-        "yoast/phpunit-polyfills": "^1.1",
+        "yoast/phpunit-polyfills": "^4.0",
         "brain/monkey": "^2.6",
         "mockery/mockery": "^1.6"
     },
