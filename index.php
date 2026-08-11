@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Plugin Name: WP Cloud Files
  * Plugin URI: https://avunu.io/
@@ -25,7 +26,7 @@ if (file_exists($composerAutoloader)) {
     require_once $composerAutoloader;
 } else {
     // Log or notify that Composer dependencies are missing
-    add_action('admin_notices', function() {
+    add_action('admin_notices', function () {
         echo '<div class="error"><p>';
         echo 'WP Cloud Files plugin requires Composer dependencies to be installed. Please run "composer install" in the plugin directory.';
         echo '</p></div>';
@@ -44,7 +45,13 @@ $wpcfUpdateChecker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdate
     'wp-cloud-files'
 );
 // Download the built release asset, not GitHub's source tarball (which lacks vendor/).
-$wpcfUpdateChecker->getVcsApi()->enableReleaseAssets('/wp-cloud-files\.zip$/');
+// getVcsApi() is typed as the base Api; enableReleaseAssets() only exists on the
+// GitHub/GitLab implementations, so guard rather than assume the URL above never
+// changes host.
+$wpcfVcsApi = $wpcfUpdateChecker->getVcsApi();
+if ($wpcfVcsApi instanceof \YahnisElsts\PluginUpdateChecker\v5p7\Vcs\GitHubApi) {
+    $wpcfVcsApi->enableReleaseAssets('/wp-cloud-files\.zip$/');
+}
 
 // Load autoloader
 spl_autoload_register(function ($class) {
@@ -64,17 +71,17 @@ if (defined('WP_CLI') && WP_CLI) {
 }
 
 // Bootstrap the plugin
-add_action('plugins_loaded', function() {
+add_action('plugins_loaded', function () {
     if (
-        defined('S3_KEY') && 
-        defined('S3_SECRET') && 
-        defined('S3_BUCKET') && 
-        defined('S3_ENDPOINT') && 
+        defined('S3_KEY') &&
+        defined('S3_SECRET') &&
+        defined('S3_BUCKET') &&
+        defined('S3_ENDPOINT') &&
         defined('S3_PUBLIC_URL')
     ) {
         Avunu\WPCloudFiles\Plugin::boot();
     } else {
-        add_action('admin_notices', function() {
+        add_action('admin_notices', function () {
             echo '<div class="error"><p>';
             echo 'WP Cloud Files plugin requires S3_KEY, S3_SECRET, S3_BUCKET, S3_ENDPOINT, and S3_PUBLIC_URL constants to be defined.';
             echo '</p></div>';
@@ -86,7 +93,7 @@ add_action('plugins_loaded', function() {
 // Must stay in step with the "Requires PHP" header and composer.json: a lower
 // bound here let PHP 8.1/8.2 sites activate cleanly and then fatal at runtime on
 // dependencies that need 8.3.
-register_activation_hook(__FILE__, function() {
+register_activation_hook(__FILE__, function () {
     if (version_compare(PHP_VERSION, '8.3', '<')) {
         deactivate_plugins(plugin_basename(__FILE__));
         wp_die('WP Cloud Files requires PHP 8.3 or higher.');

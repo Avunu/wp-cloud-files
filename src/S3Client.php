@@ -145,28 +145,28 @@ class S3Client
     public function getPublicUrl(string $path): string
     {
         $baseUrl = rtrim(S3_PUBLIC_URL, '/');
-        
+
         if (defined('S3_ROOT') && S3_ROOT) {
             $baseUrl .= '/' . trim(S3_ROOT, '/');
         }
-        
+
         return $baseUrl . '/' . ltrim($path, '/');
     }
-    
+
     public function uploadFile(string $localPath, string $s3Path): bool
     {
         if (!file_exists($localPath) || !is_readable($localPath)) {
             return false;
         }
-        
+
         try {
             $stream = fopen($localPath, 'r');
             $this->getFilesystem()->writeStream($s3Path, $stream);
-            
+
             if (is_resource($stream)) {
                 fclose($stream);
             }
-            
+
             return true;
         } catch (\Throwable $e) {
             if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -175,13 +175,19 @@ class S3Client
             return false;
         }
     }
-    
+
     public function deleteFile(string $s3Path): bool
     {
         try {
             if ($this->getFilesystem()->fileExists($s3Path)) {
-                return $this->getFilesystem()->delete($s3Path);
+                // Flysystem's delete() returns void and throws on failure.
+                // Returning it directly yielded null from this bool method, which
+                // the catch below then swallowed into `false` -- so deleting a
+                // file that existed always reported failure, and logged an error,
+                // even though the object was gone.
+                $this->getFilesystem()->delete($s3Path);
             }
+
             return true; // If file doesn't exist, consider deletion successful
         } catch (\Throwable $e) {
             if (defined('WP_DEBUG') && WP_DEBUG) {
