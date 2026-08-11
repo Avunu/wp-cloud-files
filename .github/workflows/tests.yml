@@ -113,7 +113,7 @@ jobs:
       # lock.packages ++ lock.packages-dev with allRefs=true). No binary cache
       # touches ~/.cache/nix/gitv3.
       - name: Cache Nix git fetches
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/nix/gitv3
@@ -165,7 +165,7 @@ jobs:
           purge-primary-key: never
 
       - name: Cache Nix git fetches
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/nix/gitv3
@@ -176,7 +176,7 @@ jobs:
       # One wordpress-develop tarball gives both core (src/) and the PHPUnit
       # suite (tests/phpunit). trunk is keyed per-run so nightly is never stale.
       - name: Cache WordPress
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .devenv/state/wordpress
           key: wp-${{ matrix.leg.wp }}-${{ matrix.leg.role == 'nightly' && github.run_id || 'pinned' }}
