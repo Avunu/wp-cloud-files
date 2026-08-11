@@ -152,24 +152,4 @@ final class UrlRewriterTest extends UnitTestCase
 
         $this->assertSame($sources[150]['url'], $result[150]['url']);
     }
-
-    // ---------------------------------------------------------------- //
-    // rewriteContentUrls                                               //
-    // ---------------------------------------------------------------- //
-
-    public function testContentWithoutAnImgTagIsReturnedUnchanged(): void
-    {
-        $content = '<a href="http://example.org/wp-content/uploads/2026/08/report.pdf">report</a>';
-
-        $this->assertSame(
-            $content,
-            $this->rewriter->rewriteContentUrls($content),
-            'known limitation: the <img guard means links, <video> and <source> are never rewritten'
-        );
-    }
-
-    public function testEmptyContentIsReturnedUnchanged(): void
-    {
-        $this->assertSame('', $this->rewriter->rewriteContentUrls(''));
-    }
 }

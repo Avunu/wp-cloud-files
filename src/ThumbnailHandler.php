@@ -57,20 +57,18 @@ class ThumbnailHandler
         $attachmentDir = dirname($filePath);
         $originalFilename = pathinfo($filePath, PATHINFO_FILENAME);
 
-        foreach ($sizes as $sizeName => $dimensions) {
-            // Skip if this size already exists
-            if (isset($metadata['sizes'][$sizeName])) {
-                continue;
-            }
+        // Only ask for the sizes that are actually missing, and render them in a
+        // single pass — the document→PDF conversion is the expensive part and is
+        // identical for every size.
+        $wanted = array_diff_key($sizes, $metadata['sizes']);
+        if ($wanted === []) {
+            return $metadata;
+        }
 
-            $thumbnailPath = $this->getThumbnailer()->generateThumbnail(
-                $filePath,
-                $mimeType,
-                $dimensions['width'],
-                $dimensions['height']
-            );
+        $thumbnails = $this->getThumbnailer()->generateThumbnails($filePath, $mimeType, $wanted);
 
-            if (!$thumbnailPath || !file_exists($thumbnailPath)) {
+        foreach ($thumbnails as $sizeName => $thumbnailPath) {
+            if (!file_exists($thumbnailPath)) {
                 continue;
             }
 
@@ -102,6 +100,19 @@ class ThumbnailHandler
 
     /**
      * Get image sizes to generate, including 'full' for media library preview.
+     *
+     * Static and public because `wp wp-cloud-files regenerate-thumbnails` has to
+     * produce exactly the same set; it used to keep its own copy of this table.
+     *
+     * @return array<string, array{width: int, height: int}>
+     */
+    public static function documentPreviewSizes(): array
+    {
+        return (new self())->getImageSizes();
+    }
+
+    /**
+     * @return array<string, array{width: int, height: int}>
      */
     private function getImageSizes(): array
     {

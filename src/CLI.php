@@ -576,13 +576,8 @@ class CLI
                 $cleanup_temp = true;
             }
 
-            // Generate thumbnails - include 'full' for media library preview
-            $sizes = [
-                'full' => ['width' => 1500, 'height' => 1500],
-                'thumbnail' => ['width' => get_option('thumbnail_size_w', 150), 'height' => get_option('thumbnail_size_h', 150)],
-                'medium' => ['width' => get_option('medium_size_w', 300), 'height' => get_option('medium_size_h', 300)],
-                'large' => ['width' => get_option('large_size_w', 1024), 'height' => get_option('large_size_h', 1024)],
-            ];
+            // Same set the upload path generates, from one shared definition.
+            $sizes = ThumbnailHandler::documentPreviewSizes();
 
             if (!isset($metadata['sizes'])) {
                 $metadata['sizes'] = [];
@@ -591,13 +586,16 @@ class CLI
             $generated = false;
             $original_filename = pathinfo($file, PATHINFO_FILENAME);
 
-            foreach ($sizes as $size_name => $dimensions) {
-                $thumbnail_path = $thumbnailer->generateThumbnail($file, $mime_type, $dimensions['width'], $dimensions['height']);
+            // One render, every size — the document→PDF conversion dominates and
+            // does not vary per size.
+            $thumbnails = $thumbnailer->generateThumbnails($file, $mime_type, $sizes);
 
-                if (!$thumbnail_path || !file_exists($thumbnail_path)) {
-                    if ($verbose) {
-                        WP_CLI::log(sprintf('  Failed to generate %s thumbnail.', $size_name));
-                    }
+            if ($thumbnails === [] && $verbose) {
+                WP_CLI::log('  Failed to generate thumbnails.');
+            }
+
+            foreach ($thumbnails as $size_name => $thumbnail_path) {
+                if (!file_exists($thumbnail_path)) {
                     continue;
                 }
 

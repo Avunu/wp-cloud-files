@@ -60,8 +60,9 @@ class Plugin
         //     }, 999, 2);
         // }, 1);
 
-        // Handle content URL rewrites
-        // add_filter('the_content', [$urlRewriter, 'rewriteContentUrls'], 10);
+        // No the_content filter: rewriting URLs on every page render is both
+        // slower and less complete than `wp wp-cloud-files migrate-urls`, which
+        // does a one-time search-replace over the database.
     }
 
     private static function directUploadsEnabled(): bool

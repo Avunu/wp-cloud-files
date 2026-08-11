@@ -1,10 +1,12 @@
 # Findings from building the test suite
 
-Bugs confirmed by reading the source and, where noted, reproduced by a test. The first four are **already fixed** with regression coverage. The rest are written up here for filing as issues — they need design decisions, not one-line edits, so they were left out of the test-suite change.
+Bugs found while building the test suite, all confirmed by reading the source and reproduced by a test. **All twelve are now fixed**, each with regression coverage.
+
+Items 1-6 were fixed as they were found. Items 7-12 needed design decisions rather than one-line edits, so they were filed first and resolved in a follow-up.
 
 * * *
 
-## Fixed (with regression tests)
+## Fixed while building the suite
 
 ### 1\. `UrlRewriter` rewrote sibling directories — `src/UrlRewriter.php`
 
@@ -55,51 +57,61 @@ Tests: `tests/Integration/S3ClientTest.php`.
 
 * * *
 
-## Open — recommended for filing
+## Resolved
 
-### 7\. PowerPoint thumbnails have never worked
+### 7\. PowerPoint thumbnails now render
 
-`src/DocumentThumbnailer.php`, `processPresentation()`
+`src/DocumentThumbnailer.php`
 
-The method writes a `.pptx` and hands it to `Imagick::readImage($path . '[0]')`. **ImageMagick has no PPTX decoder**, so this always throws and returns `null`. Pinned by `DocumentThumbnailerTest::testPresentationThumbnailsAreNotSupported` (`@group known-defect`, excluded from normal runs).
+`processPresentation()` wrote a `.pptx` and handed it to `Imagick::readImage()`, which has no PPTX decoder — so this always threw. Presentations now go through the same PhpPresentation → DomPDF → Imagick path Word and Excel use; `phpoffice/phppresentation` ships a working `Writer\PDF\DomPDF` adapter and `dompdf/dompdf` was already a dependency. `processPresentation()` is deleted.
 
-_Fix:_ route presentations through the same PhpPresentation → PDF → raster path the Word branch uses, rather than handing Office XML to ImageMagick.
+Only slide 1 is ever rasterized, but the HTML writer renders the whole deck and base64-inlines every image first, so `trimToFirstSlide()` drops the rest before conversion.
 
-### 8\. Any upload-capable user can claim any existing bucket object
+Upstream fidelity limits, documented rather than worked around: slide backgrounds, layout/master graphics and charts are dropped by the HTML writer, and the adapter hardcodes A4 landscape so 16:9 decks are clipped on the right. Legacy `.ppt` parses but throws `FeatureNotImplementedException` on some real-world files, which degrades to `null`.
 
-`src/DirectUpload/RestController.php`, `createAttachment()`
+Tests: `tests/Thumbnails/DocumentThumbnailerTest.php` renders committed `sample.pptx` and `sample.odp` fixtures produced by LibreOffice.
 
-Nothing ties the submitted `key` to a presign that _this_ user requested. A user with `upload_files` can post an arbitrary key and mint a WordPress attachment — with a public GUID — for any pre-existing object in the bucket whose extension is an allowed upload type.
+### 8\. Direct uploads are bound to the presign that issued them
 
-_Fix:_ record issued presigns (user ID + key + expiry) in a transient and require a match in `createAttachment()`, or sign the key into an opaque token returned by `presign()`.
+`src/DirectUpload/RestController.php`
 
-### 9\. Unbounded collision loop in a synchronous request
+Nothing tied the `key` submitted to `/attachment` back to a presign, so any user with `upload_files` could name an arbitrary bucket object. Worse than first written up: because deleting an attachment deletes the underlying object, this was an **arbitrary-delete primitive** over everything under `S3_ROOT` — and `S3_ROOT` unset, which the README documents, means the whole bucket. It also served as an existence oracle and pulled arbitrary bucket content onto the web server for ImageMagick/Ghostscript to parse.
 
-`src/DirectUpload/RestController.php`, `uniqueKey()`
+`presign()` now returns an HMAC token binding key + user + expiry, and `/attachment` rejects anything else with `wpcf_bad_token`. Stateless on purpose: a transient can be evicted mid-upload under an external object cache, and a nonce lives 12–24h against a 15-minute presign.
 
-The `while` over `fileExists()` has no attempt cap. N colliding objects means N sequential HEAD requests inside a REST request, and a provider that erroneously reports "exists" pins a PHP-FPM worker until `max_execution_time`.
+Three further parity gaps closed in the same change: `current_user_can('edit_post', $post)` before attaching to a post, `filesize` read from S3 rather than from the browser, and the key constrained to the uploads layout.
 
-_Fix:_ cap at ~100 attempts and fall back to a `uniqid()` suffix.
+Tests: `tests/Integration/RestDirectUploadTest.php`. Verified against the pre-fix controller — 12 of them fail there, including the arbitrary-object claim.
 
-### 10\. Over-eager size elision can skip uploads
+### 9\. The collision loop is bounded
 
-`src/MediaHandler.php`, `shouldHaveModernFormats()` / size-requirement logic
+`RestController::uniqueKey()` walked S3 collisions with no iteration cap, each step a network HEAD. Capped at 100, then falls back to a random suffix. The `catch` also used to swallow every throwable and return the bare name, silently overwriting an existing object whenever S3 was briefly unhealthy; it now takes the random suffix too.
 
-A required size is dropped when the original is smaller in **either** dimension, but WordPress generates a non-cropped size when the original is larger in **either** dimension. So `isMetadataComplete()` can return `true` while derivatives WordPress did generate never reach S3. Usually masked by the priority-999 hook re-running, which is why it has gone unnoticed.
+Still true, and commented as such: the loop reserves nothing, so concurrent presigns for the same filename can agree on a key. Closing that needs a reservation record.
 
-### 11\. `rewriteContentUrls()` is dead code that would break `S3_ROOT` sites
+### 10\. Subsize elision matches WordPress
 
-`src/Plugin.php:64` (hook commented out), `src/UrlRewriter.php`
+`src/MediaHandler.php`
 
-It uses raw `S3_PUBLIC_URL` instead of `getPublicUrl()`, so it ignores `S3_ROOT` and would emit 404ing URLs on any site that sets it. It also early-returns unless the content contains `<img`, so links, `<video>` and `<source>` would never be rewritten. Either fix all three issues before enabling it, or delete it.
+The plugin dropped a required size when the original was smaller in **either** dimension; `image_resize_dimensions()` skips only when it is smaller in **both** (and compares one dimension only when the other is zero). A 2000×500 panorama really does get a 1024×256 `large`. Since `uploadFile()` deletes the local original once metadata looks complete, calling it early could lose derivatives that WordPress was still writing.
 
-### 12\. Document thumbnails do 4× the necessary work
+`getRegisteredImageSizes()` now defers to core's `wp_get_registered_image_subsizes()`, which also honours the `intermediate_image_sizes` filter and resolves crop flags.
 
-`src/ThumbnailHandler.php`, `handleDocumentThumbnails()` — and the same pattern in `src/CLI.php`, `regenerate_thumbnails()`.
+Tests: `tests/Unit/MediaHandlerSubsizeRuleTest.php`, including the cropped-thumbnail case that proves the rule cannot be conditional on `crop`.
 
-The loop calls `generateThumbnail()` once per size, so a `.docx` is fully re-converted to PDF and re-rasterised four times per upload. Converting once and scaling the result four times would be roughly 4× faster.
+### 11\. `rewriteContentUrls()` deleted
 
-* * *
+Commented out since the initial commit and never enabled. It ignored `S3_ROOT`, only fired when the content contained an `<img`, and lacked the prefix-boundary fix the other rewriters received. `wp wp-cloud-files migrate-urls` covers the use case with a one-time search-replace and no per-request cost.
+
+### 12\. Documents render once, not once per size
+
+`src/DocumentThumbnailer.php`, `src/ThumbnailHandler.php`, `src/CLI.php`
+
+Four sizes meant four document loads, four PDF conversions and four Ghostscript rasterizations. `processToPdf()` is split into `renderToPdf()` and `rasterizePdf()`; the page is read and normalised once and each size is a clone-and-scale of that master. `ThumbnailHandler` and `CLI::regenerate_thumbnails()` now share one size table instead of keeping separate copies.
+
+Also fixed: `mergeImageLayers()` returns a new handle and the old one was never cleared, leaking a full-resolution buffer per call.
+
+Tests assert the render count is exactly 1 for a four-size run, rather than timing anything.
 
 ## Observations worth knowing
 
@@ -113,4 +125,4 @@ The loop calls `generateThumbnail()` once per size, so a `.docx` is fully re-con
 
 -   **`assets/js/direct-upload.js` is untested.** It is an IIFE with no exports, so it needs either a small refactor or a browser-driven test. `npm run check:types` runs in CI, which is the cheap half.
 -   **`CLI::migrate_urls()` is uncovered.** It ends in `WP_CLI::runcommand('search-replace …')`, so testing it meaningfully means asserting on the generated command string rather than its effect.
--   **PHPStan runs at level 5**, with 7 baselined entries. Level 6 is a reasonable follow-up; most of the delta is one shared attachment-metadata array shape.
+-   **PHPStan runs at level 5**, with 4 baselined entries. Level 6 is a reasonable follow-up; most of the delta is one shared attachment-metadata array shape.

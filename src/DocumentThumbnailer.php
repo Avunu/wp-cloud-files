@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Avunu\WPCloudFiles;
 
+use PhpOffice\PhpPresentation\IOFactory as PresentationIOFactory;
+use PhpOffice\PhpPresentation\PhpPresentation;
+use PhpOffice\PhpPresentation\Writer\PDF\DomPDF as PresentationPdfWriter;
+use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
 use PhpOffice\PhpWord\IOFactory as WordIOFactory;
 use PhpOffice\PhpWord\Settings as WordSettings;
-use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
-use PhpOffice\PhpPresentation\IOFactory as PresentationIOFactory;
-use PhpOffice\PhpPresentation\Writer\PowerPoint2007;
 
 class DocumentThumbnailer
 {
@@ -97,50 +98,117 @@ class DocumentThumbnailer
      */
     public function generateThumbnail(string $filePath, string $mimeType, int $width, int $height): ?string
     {
+        $thumbnails = $this->generateThumbnails($filePath, $mimeType, [
+            'default' => ['width' => $width, 'height' => $height],
+        ]);
+
+        return $thumbnails['default'] ?? null;
+    }
+
+    /**
+     * Render a document once and produce every requested size from that render.
+     *
+     * Callers want four sizes per document. Doing that through generateThumbnail()
+     * meant loading the document, converting it to PDF and running the Ghostscript
+     * rasterizer four separate times; the conversion is by far the expensive part
+     * and its result is identical every time.
+     *
+     * @param array<string, array{width: int, height: int}> $sizes
+     * @return array<string, string> size name => path to a temporary JPEG
+     */
+    public function generateThumbnails(string $filePath, string $mimeType, array $sizes): array
+    {
+        if ($sizes === []) {
+            return [];
+        }
+
         $formatInfo = $this->getFormatInfo($mimeType, $filePath);
         if (!$formatInfo) {
             $this->log("Unsupported file type. MIME: {$mimeType}");
-            return null;
+            return [];
+        }
+
+        $pdf = $this->renderToPdf($filePath, $formatInfo);
+        if ($pdf === null) {
+            return [];
+        }
+
+        try {
+            return $this->rasterizePdf($pdf['path'], $sizes);
+        } finally {
+            if ($pdf['temporary'] && file_exists($pdf['path'])) {
+                unlink($pdf['path']);
+            }
+        }
+    }
+
+    /**
+     * Convert a document to a PDF that can be rasterized.
+     *
+     * @param array{type: string, format: string} $formatInfo
+     * @return array{path: string, temporary: bool}|null `temporary` is false when
+     *         the input was already a PDF, so the caller must not delete it.
+     */
+    protected function renderToPdf(string $filePath, array $formatInfo): ?array
+    {
+        if ($formatInfo['type'] === 'pdf') {
+            return ['path' => $filePath, 'temporary' => false];
         }
 
         try {
             switch ($formatInfo['type']) {
                 case 'word':
-                    return $this->processToPdf(
-                        $filePath,
-                        $formatInfo['format'],
-                        fn($fmt) => WordIOFactory::createReader($fmt),
-                        fn($doc, $type) => WordIOFactory::createWriter($doc, $type),
-                        'PDF',
-                        $width,
-                        $height
-                    );
+                    $document = WordIOFactory::createReader($formatInfo['format'])->load($filePath);
+                    $writer = WordIOFactory::createWriter($document, 'PDF');
+                    break;
 
                 case 'spreadsheet':
-                    return $this->processToPdf(
-                        $filePath,
-                        $formatInfo['format'],
-                        fn($fmt) => SpreadsheetIOFactory::createReader($fmt),
-                        fn($doc, $type) => SpreadsheetIOFactory::createWriter($doc, $type),
-                        'Mpdf',
-                        $width,
-                        $height
-                    );
+                    $document = SpreadsheetIOFactory::createReader($formatInfo['format'])->load($filePath);
+                    $writer = SpreadsheetIOFactory::createWriter($document, 'Mpdf');
+                    break;
 
                 case 'presentation':
-                    return $this->processPresentation($filePath, $formatInfo['format'], $width, $height);
-
-                case 'pdf':
-                    return $this->generateThumbnailFromPdf($filePath, $width, $height);
+                    // PhpPresentation's PDF writer is its HTML writer driven
+                    // through DomPDF, which is already a dependency. Slide 1
+                    // becomes page 1, which is what the rasterizer reads.
+                    $document = PresentationIOFactory::createReader($formatInfo['format'])->load($filePath);
+                    $writer = new PresentationPdfWriter($this->trimToFirstSlide($document));
+                    break;
 
                 default:
                     $this->log("Unknown document type: {$formatInfo['type']}");
                     return null;
             }
-        } catch (\Exception $e) {
-            $this->log("Error processing document: {$e->getMessage()}");
+
+            $pdfPath = $this->getTemporaryPath();
+            $writer->save($pdfPath);
+
+            if (!file_exists($pdfPath)) {
+                $this->log('Converter produced no PDF');
+                return null;
+            }
+
+            return ['path' => $pdfPath, 'temporary' => true];
+        } catch (\Throwable $e) {
+            $this->log("Error processing document to PDF: {$e->getMessage()}");
             return null;
         }
+    }
+
+    /**
+     * Drop every slide but the first.
+     *
+     * The HTML writer renders the whole deck and base64-inlines every image
+     * before DomPDF runs, yet only page 1 is ever rasterized. On a large deck
+     * that is a great deal of wasted memory and time.
+     */
+    private function trimToFirstSlide(PhpPresentation $presentation): PhpPresentation
+    {
+        while (count($presentation->getAllSlides()) > 1) {
+            $presentation->removeSlideByIndex(1);
+        }
+
+        return $presentation;
     }
 
     /**
@@ -160,73 +228,6 @@ class DocumentThumbnailer
     }
 
     /**
-     * Generic helper that processes a document by converting it to PDF and generating a thumbnail.
-     */
-    private function processToPdf(
-        string $filePath,
-        string $format,
-        callable $readerCreator,
-        callable $writerCreator,
-        string $writerType,
-        int $width,
-        int $height
-    ): ?string {
-        try {
-            $reader = $readerCreator($format);
-            $document = $reader->load($filePath);
-            $pdfWriter = $writerCreator($document, $writerType);
-            $pdfPath = $this->getTemporaryPath();
-            $pdfWriter->save($pdfPath);
-            $thumbnailPath = $this->generateThumbnailFromPdf($pdfPath, $width, $height);
-            if (file_exists($pdfPath)) {
-                unlink($pdfPath);
-            }
-            return $thumbnailPath;
-        } catch (\Exception $e) {
-            $this->log("Error processing document to PDF: {$e->getMessage()}");
-            return null;
-        }
-    }
-
-    /**
-     * Process presentation files.
-     */
-    protected function processPresentation(string $filePath, string $format, int $width, int $height): ?string
-    {
-        try {
-            $reader = PresentationIOFactory::createReader($format);
-            $presentation = $reader->load($filePath);
-            $slide = $presentation->getSlide(0);
-            if (!$slide) {
-                return null;
-            }
-            $tempPptx = sys_get_temp_dir() . '/' . uniqid('presentation_', true) . '.pptx';
-            $writer = new PowerPoint2007($presentation);
-            $writer->save($tempPptx);
-
-            try {
-                $imagick = new \Imagick();
-                $imagick->setResolution(300, 300);
-                $imagick->readImage($tempPptx . '[0]');
-                $imagick->setImageFormat('jpg');
-                $imagick->thumbnailImage($width, $height, true, true);
-                $thumbnailPath = sys_get_temp_dir() . '/' . uniqid('thumbnail_', true) . '.jpg';
-                $imagick->writeImage($thumbnailPath);
-                $imagick->clear();
-                unlink($tempPptx);
-                return $thumbnailPath;
-            } catch (\ImagickException $e) {
-                $this->log("Imagick error processing presentation: {$e->getMessage()}");
-                unlink($tempPptx);
-                return null;
-            }
-        } catch (\Exception $e) {
-            $this->log("Error processing presentation: {$e->getMessage()}");
-            return null;
-        }
-    }
-
-    /**
      * Generate a temporary PDF file path.
      */
     protected function getTemporaryPath(): string
@@ -239,48 +240,82 @@ class DocumentThumbnailer
      */
     protected function generateThumbnailFromPdf(string $pdfPath, int $width, int $height): ?string
     {
+        $thumbnails = $this->rasterizePdf($pdfPath, [
+            'default' => ['width' => $width, 'height' => $height],
+        ]);
+
+        return $thumbnails['default'] ?? null;
+    }
+
+    /**
+     * Rasterize page 1 of a PDF into one JPEG per requested size.
+     *
+     * The page is read and normalised exactly once — reading it forks the
+     * Ghostscript delegate at 300 DPI, which dominates the cost — and each size
+     * is then a cheap clone-and-scale of that master.
+     *
+     * @param array<string, array{width: int, height: int}> $sizes
+     * @return array<string, string> size name => path to a temporary JPEG
+     */
+    protected function rasterizePdf(string $pdfPath, array $sizes): array
+    {
+        $master = null;
+        $thumbnails = [];
+
         try {
-            $imagick = new \Imagick();
-            $imagick->setResolution(300, 300);
-            $imagick->readImage($pdfPath . '[0]');
+            $master = new \Imagick();
+            $master->setResolution(300, 300);
+            $master->readImage($pdfPath . '[0]');
 
-            // Set compression quality
-            $imagick->setCompressionQuality(80);
+            $master->setImageFormat('jpg');
+            $master->setImageBackgroundColor('white');
+            $master->setCompressionQuality(80);
 
-            // Scale image (do this before format conversion for better quality)
-            $imagick->scaleImage($width, $height, true);
+            // Remove alpha, then flatten. Done once on the master rather than
+            // per size; PDFs with transparency come out with inverted colours
+            // otherwise.
+            $master->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
 
-            // Set format and background
-            $imagick->setImageFormat('jpg');
-            $imagick->setImageBackgroundColor('white');
+            $flattened = $master->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
+            // mergeImageLayers returns a NEW handle; the original has to be
+            // released explicitly or its full-resolution buffer leaks.
+            $master->clear();
+            $master = $flattened;
 
-            // Remove alpha channel - this fixes inverted color issues
-            if (method_exists($imagick, 'setImageAlphaChannel')) {
-                if (defined('Imagick::ALPHACHANNEL_REMOVE')) {
-                    $imagick->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
-                } else {
-                    // Fallback constant value for ALPHACHANNEL_REMOVE
-                    $imagick->setImageAlphaChannel(11);
+            $master->stripImage();
+
+            foreach ($sizes as $name => $dimensions) {
+                $frame = clone $master;
+
+                try {
+                    // Bestfit, so the aspect ratio is preserved and the result
+                    // never exceeds the requested box.
+                    $frame->scaleImage($dimensions['width'], $dimensions['height'], true);
+
+                    $path = sys_get_temp_dir() . '/' . uniqid('thumbnail_', true) . '.jpg';
+                    $frame->writeImage($path);
+                    $thumbnails[$name] = $path;
+                } finally {
+                    $frame->clear();
                 }
             }
 
-            // Flatten layers - crucial for PDFs with transparency
-            if (method_exists($imagick, 'mergeImageLayers')) {
-                $imagick = $imagick->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
-            } else {
-                $imagick = $imagick->flattenImages();
-            }
-
-            // Strip metadata
-            $imagick->stripImage();
-
-            $thumbnailPath = sys_get_temp_dir() . '/' . uniqid('thumbnail_', true) . '.jpg';
-            $imagick->writeImage($thumbnailPath);
-            $imagick->clear();
-            return $thumbnailPath;
+            return $thumbnails;
         } catch (\ImagickException $e) {
             $this->log("Imagick error: {$e->getMessage()}");
-            return null;
+
+            // Do not leave half a set of sizes behind for the caller to reason about.
+            foreach ($thumbnails as $path) {
+                if (file_exists($path)) {
+                    unlink($path);
+                }
+            }
+
+            return [];
+        } finally {
+            if ($master instanceof \Imagick) {
+                $master->clear();
+            }
         }
     }
 

@@ -343,11 +343,10 @@ class MediaHandler
         // Get all registered image sizes
         $registered_sizes = $this->getRegisteredImageSizes();
 
-        // If the image is too small for some sizes, WordPress won't create them
+        // Drop the sizes WordPress will not generate for an original this size.
         if (isset($metadata['width'], $metadata['height'])) {
             foreach ($registered_sizes as $size_name => $dimensions) {
-                // If the original is smaller than this size in EITHER dimension, WordPress will skip it
-                if ($metadata['width'] < $dimensions['width'] || $metadata['height'] < $dimensions['height']) {
+                if (!$this->willGenerateSize((int) $metadata['width'], (int) $metadata['height'], $dimensions)) {
                     if (defined('WP_DEBUG') && WP_DEBUG) {
                         error_log("S3 Upload: Image $attachment_id too small for size: $size_name, will skip checking for it");
                     }
@@ -428,43 +427,78 @@ class MediaHandler
     }
 
     /**
+     * Will WordPress actually produce this subsize for an original of the given
+     * dimensions?
+     *
+     * Mirrors image_resize_dimensions() (wp-includes/media.php). The rule is
+     * "skip only when the original is smaller in BOTH dimensions" -- not either.
+     * A 2000x500 panorama really does get a 1024x256 `large`, and getting this
+     * wrong declares an attachment complete while WordPress is still writing
+     * subsizes, at which point uploadFile() deletes the original out from under
+     * it and those derivatives are lost.
+     *
+     * `crop` deliberately plays no part: in core that branch runs *after* this
+     * early return and only changes the output geometry. A cropped 150x150
+     * thumbnail of an 800x100 original is still generated, just as 150x100.
+     *
+     * @param array{width?: int|string, height?: int|string} $dimensions
+     */
+    private function willGenerateSize(int $originalWidth, int $originalHeight, array $dimensions): bool
+    {
+        $width  = (int) ($dimensions['width'] ?? 0);
+        $height = (int) ($dimensions['height'] ?? 0);
+
+        // A size with only one dimension constrains on that dimension alone.
+        if ($height === 0) {
+            return $originalWidth >= $width;
+        }
+
+        if ($width === 0) {
+            return $originalHeight >= $height;
+        }
+
+        return $originalWidth >= $width || $originalHeight >= $height;
+    }
+
+    /**
      * Get all registered image sizes with their dimensions
      *
      * @return array Array of image sizes with width and height
      */
     private function getRegisteredImageSizes(): array
     {
-        $sizes = [];
+        // Core's own table. Unlike a hand-rolled version it honours the
+        // `intermediate_image_sizes` filter (so a theme that unsets a default
+        // size is respected), resolves crop flags, and skips sizes whose width
+        // and height are both zero.
+        if (function_exists('wp_get_registered_image_subsizes')) {
+            return wp_get_registered_image_subsizes();
+        }
 
-        // Add default sizes
-        $sizes['thumbnail'] = [
-            'width' => get_option('thumbnail_size_w'),
-            'height' => get_option('thumbnail_size_h'),
+        // Fallback for WordPress < 5.3.
+        $sizes = [
+            'thumbnail' => [
+                'width'  => (int) get_option('thumbnail_size_w'),
+                'height' => (int) get_option('thumbnail_size_h'),
+            ],
+            'medium' => [
+                'width'  => (int) get_option('medium_size_w'),
+                'height' => (int) get_option('medium_size_h'),
+            ],
+            'medium_large' => [
+                'width'  => (int) get_option('medium_large_size_w') ?: 768,
+                'height' => (int) get_option('medium_large_size_h') ?: 0,
+            ],
+            'large' => [
+                'width'  => (int) get_option('large_size_w'),
+                'height' => (int) get_option('large_size_h'),
+            ],
         ];
 
-        $sizes['medium'] = [
-            'width' => get_option('medium_size_w'),
-            'height' => get_option('medium_size_h'),
-        ];
-
-        $sizes['medium_large'] = [
-            'width' => get_option('medium_large_size_w') ?: 768,
-            'height' => get_option('medium_large_size_h') ?: 0,
-        ];
-
-        $sizes['large'] = [
-            'width' => get_option('large_size_w'),
-            'height' => get_option('large_size_h'),
-        ];
-
-        // Get additional image sizes
-        $additional_sizes = wp_get_additional_image_sizes();
-
-        // Merge them with the default sizes
-        foreach ($additional_sizes as $size_name => $size_data) {
+        foreach (wp_get_additional_image_sizes() as $size_name => $size_data) {
             $sizes[$size_name] = [
-                'width' => $size_data['width'],
-                'height' => $size_data['height'],
+                'width'  => (int) $size_data['width'],
+                'height' => (int) $size_data['height'],
             ];
         }
 

@@ -1,18 +1,16 @@
 # PHPStan baseline -- a tracked TODO list, not a permanent exemption.
 #
-# Every entry here is type imprecision rather than a defect:
-#   * WordPress/WP-CLI stub signatures narrower than the real runtime contract
-#     (get_posts args, WP_CLI::add_command callables, attachment metadata keys
-#     like original_image/sources that the stub shape omits but WordPress does
-#     set -- the code guards them with !empty() already).
-#   * Defensive method_exists() checks against older Imagick builds, which the
-#     currently pinned extension makes provably redundant.
+# Every entry here is type imprecision rather than a defect: WordPress stub
+# signatures narrower than the real runtime contract. The attachment-metadata
+# offsets are keys WordPress genuinely sets but the stub's array shape omits,
+# and the code already guards them with !empty().
 #
 # Real bugs found by this analysis were fixed rather than baselined -- see
 # S3Client::deleteFile() and the getVcsApi() instanceof guard in index.php.
 #
-# Regenerate with:
-#   nix build .#checks.x86_64-linux.phpstan   # then follow the failure output
+# PHPStan reports unmatched patterns as errors, so stale entries here fail the
+# build rather than accumulating silently. Regenerate with:
+#   nix build .#checks.x86_64-linux.phpstan -L   # then follow the failure output
 parameters:
 	ignoreErrors:
 		-
@@ -26,24 +24,6 @@ parameters:
 			identifier: argument.type
 			count: 1
 			path: ../src/CLI.php
-
-		-
-			message: '#^Call to function method_exists\(\) with Imagick and ''mergeImageLayers'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: ../src/DocumentThumbnailer.php
-
-		-
-			message: '#^Call to function method_exists\(\) with Imagick and ''setImageAlphaChannel'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: ../src/DocumentThumbnailer.php
-
-		-
-			message: '#^Negated boolean expression is always false\.$#'
-			identifier: booleanNot.alwaysFalse
-			count: 1
-			path: ../src/DocumentThumbnailer.php
 
 		-
 			message: '#^Offset ''original_image'' does not exist on array\{\}\|array\{width\: int, height\: int, file\: string, sizes\: array, image_meta\: array, filesize\: int\}\.$#'

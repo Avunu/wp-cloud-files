@@ -51,21 +51,4 @@ class UrlRewriter
 
         return $sources;
     }
-
-    /**
-     * Rewrite image URLs in content to point to S3
-     */
-    public function rewriteContentUrls(string $content): string
-    {
-        if (empty($content) || !str_contains($content, '<img')) {
-            return $content;
-        }
-
-        $uploads = wp_upload_dir();
-        $baseurl = $uploads['baseurl'];
-
-        // Simplistic approach: just replace all occurrences of upload URL with S3 URL
-        // For a more robust implementation, a proper HTML parser should be used
-        return str_replace($baseurl, rtrim(S3_PUBLIC_URL, '/'), $content);
-    }
 }
