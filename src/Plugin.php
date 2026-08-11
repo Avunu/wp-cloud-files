@@ -52,7 +52,7 @@ class Plugin
             // UI is accurate and Plupload doesn't reject large files client-side.
             add_filter('upload_size_limit', [$this, 'filterUploadSizeLimit']);
         }
-        
+
         // // Handle image editing (in case it bypasses normal upload flow)
         // add_action('wp_ajax_image-editor', function() use ($mediaHandler) {
         //     add_filter('wp_update_attachment_metadata', function($metadata, $attachment_id) use ($mediaHandler) {

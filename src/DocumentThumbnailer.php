@@ -243,17 +243,17 @@ class DocumentThumbnailer
             $imagick = new \Imagick();
             $imagick->setResolution(300, 300);
             $imagick->readImage($pdfPath . '[0]');
-            
+
             // Set compression quality
             $imagick->setCompressionQuality(80);
-            
+
             // Scale image (do this before format conversion for better quality)
             $imagick->scaleImage($width, $height, true);
-            
+
             // Set format and background
             $imagick->setImageFormat('jpg');
             $imagick->setImageBackgroundColor('white');
-            
+
             // Remove alpha channel - this fixes inverted color issues
             if (method_exists($imagick, 'setImageAlphaChannel')) {
                 if (defined('Imagick::ALPHACHANNEL_REMOVE')) {
@@ -263,17 +263,17 @@ class DocumentThumbnailer
                     $imagick->setImageAlphaChannel(11);
                 }
             }
-            
+
             // Flatten layers - crucial for PDFs with transparency
             if (method_exists($imagick, 'mergeImageLayers')) {
                 $imagick = $imagick->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
             } else {
                 $imagick = $imagick->flattenImages();
             }
-            
+
             // Strip metadata
             $imagick->stripImage();
-            
+
             $thumbnailPath = sys_get_temp_dir() . '/' . uniqid('thumbnail_', true) . '.jpg';
             $imagick->writeImage($thumbnailPath);
             $imagick->clear();

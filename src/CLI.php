@@ -79,7 +79,7 @@ class CLI
 
         // Create progress bar
         $progress = Utils\make_progress_bar('Migrating media to S3', $total_attachments);
-        
+
         // Track statistics
         $stats = [
             'success' => 0,
@@ -91,20 +91,20 @@ class CLI
         $processed = 0;
         $mediaHandler = new MediaHandler();
         $s3Client = S3Client::getInstance();
-        
+
         while ($processed < $total_attachments) {
             $remaining = $limit > 0 ? min($batch_size, $limit - $processed) : $batch_size;
             $attachments = $this->get_attachments($remaining, $offset + $processed);
-            
+
             if (empty($attachments)) {
                 break;
             }
-            
+
             foreach ($attachments as $attachment) {
                 // Get metadata
                 $attachment_id = $attachment->ID;
                 $metadata = wp_get_attachment_metadata($attachment_id);
-                
+
                 // Check if it's a valid attachment
                 if (empty($metadata)) {
                     WP_CLI::debug(sprintf('Skipping attachment #%d - no metadata found.', $attachment_id));
@@ -113,10 +113,10 @@ class CLI
                     $processed++;
                     continue;
                 }
-                
+
                 // Process the attachment
                 $result = $this->process_attachment($attachment_id, $metadata, $mediaHandler, $s3Client, $keep_local, $force);
-                
+
                 // Update stats
                 if ($result === true) {
                     $stats['success']++;
@@ -125,17 +125,17 @@ class CLI
                 } else {
                     $stats['failed']++;
                 }
-                
+
                 $progress->tick();
                 $processed++;
             }
-            
+
             // Clear any object cache
             wp_cache_flush();
         }
-        
+
         $progress->finish();
-        
+
         // Display results
         WP_CLI::success(sprintf(
             'Migration completed. Successfully migrated: %d, Failed: %d, Skipped: %d.',
@@ -161,18 +161,18 @@ class CLI
             'posts_per_page' => 1,
             'offset'         => $offset,
         ];
-        
+
         $query = new WP_Query($args);
         $count = $query->found_posts - $offset;
-        
+
         // If limit is set, limit the total count
         if ($limit > 0 && $count > $limit) {
             $count = $limit;
         }
-        
+
         return max(0, $count);
     }
-    
+
     /**
      * Get a batch of attachments
      *
@@ -190,11 +190,11 @@ class CLI
             'orderby'        => 'ID',
             'order'          => 'ASC',
         ];
-        
+
         $query = new WP_Query($args);
         return $query->posts;
     }
-    
+
     /**
      * Process a single attachment
      *
@@ -217,36 +217,36 @@ class CLI
         try {
             $uploads = wp_upload_dir();
             $basedir = trailingslashit($uploads['basedir']);
-            
+
             // Get the main file path
             $mainFilePath = $mediaHandler->getOriginalFilePath($metadata, $attachment_id);
-            
+
             if (empty($mainFilePath)) {
                 WP_CLI::debug(sprintf('Attachment #%d: Cannot determine file path.', $attachment_id));
                 return null;
             }
-            
+
             $mainLocalPath = $basedir . $mainFilePath;
             $baseDir = dirname($mainFilePath);
-            
+
             // Check if main file is already on S3 (unless force option is used)
             if (!$force && $this->isFileOnS3($mainFilePath, $s3Client)) {
                 WP_CLI::debug(sprintf('Attachment #%d: Already on S3, skipping.', $attachment_id));
                 return null;
             }
-            
+
             // Check if main file exists locally
             if (!file_exists($mainLocalPath)) {
                 WP_CLI::debug(sprintf('Attachment #%d: File not found locally: %s', $attachment_id, $mainLocalPath));
                 return false;
             }
-            
+
             // Upload main file
             if (!$this->uploadFileToS3($mainLocalPath, $mainFilePath, $s3Client, $keep_local)) {
                 WP_CLI::debug(sprintf('Attachment #%d: Failed to upload main file.', $attachment_id));
                 return false;
             }
-            
+
             // Process original image if it exists (for scaled images)
             if (!empty($metadata['original_image'])) {
                 $originalPath = trailingslashit($baseDir) . $metadata['original_image'];
@@ -255,7 +255,7 @@ class CLI
                     $this->uploadFileToS3($originalLocalPath, $originalPath, $s3Client, $keep_local);
                 }
             }
-            
+
             // Process image sizes
             if (!empty($metadata['sizes']) && is_array($metadata['sizes'])) {
                 foreach ($metadata['sizes'] as $size) {
@@ -265,7 +265,7 @@ class CLI
                         if (file_exists($sizeLocalPath)) {
                             $this->uploadFileToS3($sizeLocalPath, $sizePath, $s3Client, $keep_local);
                         }
-                        
+
                         // Process sources for this size (WebP/AVIF variants)
                         if (!empty($size['sources']) && is_array($size['sources'])) {
                             foreach ($size['sources'] as $source) {
@@ -281,7 +281,7 @@ class CLI
                     }
                 }
             }
-            
+
             // Process modern format alternatives for main file
             if (!empty($metadata['sources']) && is_array($metadata['sources'])) {
                 foreach ($metadata['sources'] as $source) {
@@ -294,7 +294,7 @@ class CLI
                     }
                 }
             }
-            
+
             WP_CLI::debug(sprintf('Attachment #%d: Successfully migrated to S3.', $attachment_id));
             return true;
         } catch (\Exception $e) {
@@ -302,7 +302,7 @@ class CLI
             return false;
         }
     }
-    
+
     /**
      * Check if a file is already on S3
      *
@@ -318,7 +318,7 @@ class CLI
             return false;
         }
     }
-    
+
     /**
      * Upload a file to S3
      *
@@ -333,14 +333,14 @@ class CLI
         if (!file_exists($localPath)) {
             return false;
         }
-        
+
         $success = $s3Client->uploadFile($localPath, $remotePath);
-        
+
         // Delete local file if not keeping local copies
         if ($success && !$keepLocal) {
             @unlink($localPath);
         }
-        
+
         return $success;
     }
 
@@ -472,17 +472,21 @@ class CLI
         foreach ($attachments as $attachment_id) {
             $verbose = (bool) $specific_id;
             $metadata = wp_get_attachment_metadata($attachment_id);
-            
+
             if (!is_array($metadata)) {
                 $metadata = [];
             }
 
             $mime_type = get_post_mime_type($attachment_id);
-            
+
             if (!$mime_type || !in_array($mime_type, $supported_mime_types, true)) {
-                if ($verbose) WP_CLI::log(sprintf('  Unsupported mime type: %s', $mime_type));
+                if ($verbose) {
+                    WP_CLI::log(sprintf('  Unsupported mime type: %s', $mime_type));
+                }
                 $stats['skipped']++;
-                if ($progress) $progress->tick();
+                if ($progress) {
+                    $progress->tick();
+                }
                 continue;
             }
 
@@ -493,18 +497,22 @@ class CLI
 
             // Check if we need to regenerate
             $needs_regen = $force;
-            
+
             if (!$needs_regen && empty($metadata['sizes'])) {
                 $needs_regen = true;
-                if ($verbose) WP_CLI::log('  No sizes in metadata, will generate.');
+                if ($verbose) {
+                    WP_CLI::log('  No sizes in metadata, will generate.');
+                }
             }
-            
+
             // Check if 'full' size exists (needed for media library preview)
             if (!$needs_regen && !isset($metadata['sizes']['full'])) {
                 $needs_regen = true;
-                if ($verbose) WP_CLI::log('  Missing "full" size, will generate.');
+                if ($verbose) {
+                    WP_CLI::log('  Missing "full" size, will generate.');
+                }
             }
-            
+
             // Check if files actually exist on S3
             if (!$needs_regen && !empty($metadata['sizes'])) {
                 foreach ($metadata['sizes'] as $size_name => $size_data) {
@@ -513,7 +521,9 @@ class CLI
                         try {
                             if (!$s3Client->getFilesystem()->fileExists($thumb_path)) {
                                 $needs_regen = true;
-                                if ($verbose) WP_CLI::log(sprintf('  Size "%s" missing from S3, will regenerate.', $size_name));
+                                if ($verbose) {
+                                    WP_CLI::log(sprintf('  Size "%s" missing from S3, will regenerate.', $size_name));
+                                }
                                 break;
                             }
                         } catch (\Exception $e) {
@@ -525,9 +535,13 @@ class CLI
             }
 
             if (!$needs_regen) {
-                if ($verbose) WP_CLI::log('  All thumbnails exist, skipping.');
+                if ($verbose) {
+                    WP_CLI::log('  All thumbnails exist, skipping.');
+                }
                 $stats['skipped']++;
-                if ($progress) $progress->tick();
+                if ($progress) {
+                    $progress->tick();
+                }
                 continue;
             }
 
@@ -536,8 +550,10 @@ class CLI
             $cleanup_temp = false;
 
             if (!file_exists($file)) {
-                if ($verbose) WP_CLI::log('  Downloading from S3...');
-                
+                if ($verbose) {
+                    WP_CLI::log('  Downloading from S3...');
+                }
+
                 if (!is_dir($file_dir)) {
                     wp_mkdir_p($file_dir);
                 }
@@ -546,9 +562,13 @@ class CLI
                 $response = wp_remote_get($s3_url, ['timeout' => 120]);
 
                 if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-                    if ($verbose) WP_CLI::log('  Failed to download from S3.');
+                    if ($verbose) {
+                        WP_CLI::log('  Failed to download from S3.');
+                    }
                     $stats['failed']++;
-                    if ($progress) $progress->tick();
+                    if ($progress) {
+                        $progress->tick();
+                    }
                     continue;
                 }
 
@@ -575,7 +595,9 @@ class CLI
                 $thumbnail_path = $thumbnailer->generateThumbnail($file, $mime_type, $dimensions['width'], $dimensions['height']);
 
                 if (!$thumbnail_path || !file_exists($thumbnail_path)) {
-                    if ($verbose) WP_CLI::log(sprintf('  Failed to generate %s thumbnail.', $size_name));
+                    if ($verbose) {
+                        WP_CLI::log(sprintf('  Failed to generate %s thumbnail.', $size_name));
+                    }
                     continue;
                 }
 
@@ -592,7 +614,7 @@ class CLI
                             'height'    => $img_dimensions[1],
                             'mime-type' => 'image/jpeg',
                         ];
-                        
+
                         if ($size_name === 'full') {
                             $metadata['sizes'][$size_name]['filesize'] = filesize($thumbnail_dest);
                         }
@@ -600,7 +622,9 @@ class CLI
                         if ($s3Client->uploadFile($thumbnail_dest, $thumbnail_relative)) {
                             @unlink($thumbnail_dest);
                             $generated = true;
-                            if ($verbose) WP_CLI::log(sprintf('  Generated and uploaded %s.', $size_name));
+                            if ($verbose) {
+                                WP_CLI::log(sprintf('  Generated and uploaded %s.', $size_name));
+                            }
                         }
                     }
                 } else {
@@ -619,10 +643,14 @@ class CLI
                 $stats['failed']++;
             }
 
-            if ($progress) $progress->tick();
+            if ($progress) {
+                $progress->tick();
+            }
         }
 
-        if ($progress) $progress->finish();
+        if ($progress) {
+            $progress->finish();
+        }
 
         WP_CLI::success(sprintf(
             'Thumbnail regeneration completed. Success: %d, Failed: %d, Skipped: %d.',

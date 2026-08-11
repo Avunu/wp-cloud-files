@@ -25,7 +25,7 @@ class UrlRewriter
 
         return $url;
     }
-    
+
     /**
      * Rewrite srcset URLs to point to S3
      */
@@ -34,7 +34,7 @@ class UrlRewriter
         if (empty($sources)) {
             return $sources;
         }
-        
+
         $uploads = wp_upload_dir();
         // See rewriteAttachmentUrl(): match the separator too.
         $baseurl = trailingslashit($uploads['baseurl']);
@@ -48,10 +48,10 @@ class UrlRewriter
             $relativePath = substr($source['url'], strlen($baseurl));
             $sources[$width]['url'] = S3Client::getInstance()->getPublicUrl($relativePath);
         }
-        
+
         return $sources;
     }
-    
+
     /**
      * Rewrite image URLs in content to point to S3
      */
@@ -60,10 +60,10 @@ class UrlRewriter
         if (empty($content) || !str_contains($content, '<img')) {
             return $content;
         }
-        
+
         $uploads = wp_upload_dir();
         $baseurl = $uploads['baseurl'];
-        
+
         // Simplistic approach: just replace all occurrences of upload URL with S3 URL
         // For a more robust implementation, a proper HTML parser should be used
         return str_replace($baseurl, rtrim(S3_PUBLIC_URL, '/'), $content);
