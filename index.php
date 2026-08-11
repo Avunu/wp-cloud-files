@@ -8,7 +8,7 @@
  * x-release-please-end
  * Author: Avunu
  * Author URI: https://avunu.io/
- * Requires PHP: 8.1
+ * Requires PHP: 8.3
  */
 
 declare(strict_types=1);

@@ -17,7 +17,7 @@ WP Cloud Files is a WordPress plugin that seamlessly integrates your WordPress m
 ## Requirements
 
 - WordPress (tested with latest version)
-- PHP 8.1 or higher
+- PHP 8.3 or higher
 - S3-compatible storage provider (AWS S3, DigitalOcean Spaces, MinIO, etc.)
 - Composer (for installing dependencies)
 
