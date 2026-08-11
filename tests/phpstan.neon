@@ -1,0 +1,51 @@
+# Static analysis for the plugin source.
+#
+# Run through Nix so the stubs are hash-pinned:
+#   nix build .#checks.x86_64-linux.phpstan -L
+#
+# WordPress and WP-CLI symbols come from single hash-pinned stub FILES rather
+# than the php-stubs Composer packages: those repos carry a multi-megabyte
+# generated file per release, and composition-c4 clones dependencies with
+# allRefs=true, so pulling them through Composer would fetch every version ever
+# tagged.
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 5
+
+    paths:
+        - ../src
+        - ../index.php
+
+    # Executed by PHPStan; defines the S3_* configuration constants.
+    bootstrapFiles:
+        - phpstan/constants.php
+
+    # Declarations only. The WordPress and WP-CLI stub files are appended by the
+    # Nix check, which pins them by hash.
+    scanFiles:
+        - phpstan/php-cli-tools.stub.php
+
+    # Treated as "may or may not be defined", so the defined() guards around
+    # them are not reported as always-true / dead branches.
+    dynamicConstantNames:
+        - S3_KEY
+        - S3_SECRET
+        - S3_BUCKET
+        - S3_ENDPOINT
+        - S3_PUBLIC_URL
+        - S3_REGION
+        - S3_ROOT
+        - S3_PATH_STYLE
+        - S3_UPLOAD_ACL
+        - S3_MAX_UPLOAD_SIZE
+        - S3_DIRECT_UPLOADS
+        - S3_DIRECT_UPLOAD_MIN_SIZE
+        - S3_PRESIGN_EXPIRES
+        - WP_DEBUG
+        - WP_CLI
+        - ABSPATH
+        - WP_PLUGIN_DIR
+
+    treatPhpDocTypesAsCertain: false

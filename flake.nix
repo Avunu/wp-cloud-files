@@ -248,6 +248,23 @@
           pluginPackage = self.packages.${system}.default;
           pluginDir = "${pluginPackage}/share/wordpress/plugins/wp-cloud-files";
 
+          # Single hash-pinned files rather than the php-stubs Composer packages:
+          # those repos carry a multi-megabyte generated file per release, and
+          # composition-c4 clones with allRefs=true, so pulling them through
+          # Composer would fetch every version ever tagged.
+          #
+          # Keep the WordPress stubs version in step with the "Tested up to"
+          # header; the tag is v<version>.<patch>.
+          wordpressStubs = pkgs.fetchurl {
+            url = "https://raw.githubusercontent.com/php-stubs/wordpress-stubs/v${wpTested}.1/wordpress-stubs.php";
+            hash = "sha256-Nu6Et8zxgq3qkIP6KVDulTG4ezNXaJrve/kpVo7Gr0U=";
+          };
+
+          wpCliStubs = pkgs.fetchurl {
+            url = "https://raw.githubusercontent.com/php-stubs/wp-cli-stubs/v2.12.0/wp-cli-stubs.php";
+            hash = "sha256-UuAuE/Ftg0Txcc2tcakGoZDll1Rw/tbak/fuRPE+tpo=";
+          };
+
           # The test runners live in their own Composer project so they never
           # become build inputs of `nix build .#zip` -- fetchComposerDeps clones
           # lock.packages ++ lock.packages-dev with allRefs=true at eval time.
@@ -373,6 +390,77 @@
               "maxsize"
             ];
           };
+
+          # Static analysis. The plugin's own vendor/ comes from the already-built
+          # package, so third-party classes (Aws, League, PhpOffice, Dompdf) are
+          # resolved for real rather than stubbed.
+          phpstan =
+            pkgs.runCommand "check-phpstan"
+              {
+                nativeBuildInputs = [ (pkgs.phpstan.override { inherit php; }) ];
+                src = self;
+              }
+              ''
+                set -euo pipefail
+
+                cp -r "$src" ./work
+                chmod -R u+w ./work
+                cd ./work
+
+                # Copy vendor/ in rather than pointing --autoload-file at the store.
+                # The package is built with classmap-authoritative, and the classmap
+                # resolves the plugin's own namespace through $baseDir = dirname(vendor).
+                # Left in the store, that made the autoloader serve
+                # Avunu\WPCloudFiles\* from the package while PHPStan analysed the
+                # copy here -- two files per class, which surfaced as bogus
+                # "method is unused" / "return statement is missing" errors.
+                cp -rL ${pluginDir}/vendor ./vendor
+                chmod -R u+w ./vendor
+
+                # The stub paths are store paths, so they are appended here rather
+                # than committed into tests/phpstan.neon.
+                cat > tests/phpstan-nix.neon <<EOF
+                includes:
+                    - phpstan.neon
+                parameters:
+                    scanFiles:
+                        - ${wordpressStubs}
+                        - ${wpCliStubs}
+                EOF
+
+                export HOME="$TMPDIR"
+                phpstan analyse \
+                  -c tests/phpstan-nix.neon \
+                  --no-progress \
+                  --error-format=table \
+                  --autoload-file=vendor/autoload.php \
+                  --memory-limit=2G
+
+                touch "$out"
+              '';
+
+          phpcs =
+            pkgs.runCommand "check-phpcs"
+              {
+                nativeBuildInputs = [
+                  php
+                  pkgs.php83Packages.php-codesniffer
+                ];
+                src = self;
+              }
+              ''
+                set -euo pipefail
+
+                cd "$src"
+                export HOME="$TMPDIR"
+
+                phpcs -q \
+                  -d memory_limit=1G \
+                  --standard=tests/phpcs.xml \
+                  --report=full
+
+                touch "$out"
+              '';
 
           thumbnails = mkPhpunitCheck {
             name = "thumbnails";

@@ -84,6 +84,8 @@ jobs:
       matrix:
         check:
           - plugin-header
+          - phpstan
+          - phpcs
           - unit
           - thumbnails
     steps:

@@ -1,0 +1,58 @@
+# PHPStan baseline -- a tracked TODO list, not a permanent exemption.
+#
+# Every entry here is type imprecision rather than a defect:
+#   * WordPress/WP-CLI stub signatures narrower than the real runtime contract
+#     (get_posts args, WP_CLI::add_command callables, attachment metadata keys
+#     like original_image/sources that the stub shape omits but WordPress does
+#     set -- the code guards them with !empty() already).
+#   * Defensive method_exists() checks against older Imagick builds, which the
+#     currently pinned extension makes provably redundant.
+#
+# Real bugs found by this analysis were fixed rather than baselined -- see
+# S3Client::deleteFile() and the getVcsApi() instanceof guard in index.php.
+#
+# Regenerate with:
+#   nix build .#checks.x86_64-linux.phpstan   # then follow the failure output
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Parameter \#2 \$callable of static method WP_CLI\:\:add_command\(\) expects \(callable\(\)\: mixed\)\|object\|string, array\{''Avunu\\\\WPCloudFiles…'', ''regenerate…''\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: ../index.php
+
+		-
+			message: '#^Parameter \#1 \$args of function get_posts expects array\{numberposts\?\: int, category\?\: int\|string, include\?\: array\<int\>, exclude\?\: array\<int\>, suppress_filters\?\: bool, attachment_id\?\: int, author\?\: int\|string, author_name\?\: string, \.\.\.\}\|null, array\{post_type\: ''attachment'', post_status\: ''inherit'', post_mime_type\: array\{''application/msword''\|''application/pdf''\|''application/rtf''\|''application/vnd\.ms…''\|''application/vnd…''\|''text/csv''\|''text/rtf''\}\|array\{''application/pdf'', ''application/vnd…'', ''application/msword'', ''application/vnd…'', ''application/rtf'', ''text/rtf'', ''application/vnd…'', ''application/vnd\.ms…'', \.\.\.\}, posts_per_page\: \-1\|int\<1, max\>, offset\: int, orderby\: ''ID'', order\: ''ASC'', fields\: ''ids''\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: ../src/CLI.php
+
+		-
+			message: '#^Call to function method_exists\(\) with Imagick and ''mergeImageLayers'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: ../src/DocumentThumbnailer.php
+
+		-
+			message: '#^Call to function method_exists\(\) with Imagick and ''setImageAlphaChannel'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: ../src/DocumentThumbnailer.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 1
+			path: ../src/DocumentThumbnailer.php
+
+		-
+			message: '#^Offset ''original_image'' does not exist on array\{\}\|array\{width\: int, height\: int, file\: string, sizes\: array, image_meta\: array, filesize\: int\}\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: ../src/MediaHandler.php
+
+		-
+			message: '#^Offset ''sources'' does not exist on array\{\}\|array\{width\: int, height\: int, file\: string, sizes\: array, image_meta\: array, filesize\: int\}\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: ../src/MediaHandler.php
