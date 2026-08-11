@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<!--
+    PSR-12, not the WordPress coding standard.
+
+    WPCS mandates tabs, Yoda conditions, snake_case function names and
+    class-my-class.php filenames. This codebase is deliberately PSR-4 with
+    camelCase methods and 4-space indentation, so applying WPCS wholesale would
+    produce thousands of errors describing a style the project has chosen not to
+    follow. nixpkgs also ships PHP_CodeSniffer 4.x while WPCS 3.x requires ^3.9.
+
+    Run through Nix:
+      nix build .#checks.x86_64-linux.phpcs -L
+-->
+<ruleset name="wp-cloud-files">
+    <description>PSR-12 for the plugin source and its tests.</description>
+
+    <file>../src</file>
+    <file>../index.php</file>
+    <!--
+        Test directories are listed individually rather than as ../tests: the
+        exclude-pattern below is not enough to stop PHPCS walking
+        tests/tools/vendor, and scanning the whole toolchain exhausts even a
+        512M memory limit in the reporter.
+    -->
+    <file>../tests/Unit</file>
+    <file>../tests/Integration</file>
+    <file>../tests/Thumbnails</file>
+    <file>../tests/Support</file>
+    <file>../tests/bootstrap</file>
+
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    <exclude-pattern>*/node_modules/*</exclude-pattern>
+    <!-- Declaration-only stubs; they intentionally have empty method bodies. -->
+    <exclude-pattern>*/tests/phpstan/*</exclude-pattern>
+
+    <arg name="extensions" value="php"/>
+    <arg name="basepath" value=".."/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+
+    <!-- Warnings are advisory; only errors fail the build. -->
+    <config name="ignore_warnings_on_exit" value="1"/>
+    <ini name="memory_limit" value="1G"/>
+    <arg name="report-width" value="120"/>
+
+    <rule ref="PSR12"/>
+
+    <!--
+        snake_case is mandatory in both of these places, so the camelCaps sniff
+        is simply wrong about them:
+
+        * WP-CLI derives subcommand names from method names, so
+          `wp wp-cloud-files regenerate-thumbnails` requires
+          CLI::regenerate_thumbnails(). Renaming would break the public CLI.
+        * set_up()/tear_down() are the PHPUnit Polyfills fixture contract that
+          the WordPress core test suite calls. Renaming would silently stop the
+          fixtures running.
+    -->
+    <rule ref="PSR1.Methods.CamelCapsMethodName">
+        <exclude-pattern>*/src/CLI.php</exclude-pattern>
+        <exclude-pattern>*/tests/*</exclude-pattern>
+    </rule>
+
+    <!-- Bootstraps exist to cause side effects; that is their entire job. -->
+    <rule ref="PSR1.Files.SideEffects">
+        <exclude-pattern>*/tests/bootstrap/*</exclude-pattern>
+    </rule>
+
+    <!--
+        The WP-CLI double must reproduce upstream's names exactly to stand in for
+        them: the class really is called WP_CLI, and the progress bar really is
+        cli\progress\Bar. Both live in one file because they are one double.
+    -->
+    <rule ref="Squiz.Classes.ValidClassName">
+        <exclude-pattern>*/tests/Support/wp-cli-double.php</exclude-pattern>
+    </rule>
+    <rule ref="PSR1.Classes.ClassDeclaration">
+        <exclude-pattern>*/tests/Support/wp-cli-double.php</exclude-pattern>
+    </rule>
+
+    <!--
+        The plugin talks to WordPress, whose hook callbacks and metadata arrays
+        legitimately produce long lines; warn rather than fail on width.
+    -->
+    <rule ref="Generic.Files.LineLength">
+        <properties>
+            <property name="lineLimit" value="140"/>
+            <property name="absoluteLineLimit" value="0"/>
+        </properties>
+    </rule>
+</ruleset>

@@ -5,7 +5,10 @@
     "noEmit": true,
     "target": "ES2017",
     "module": "ESNext",
-    "moduleResolution": "node",
+    // TypeScript 7 removed the legacy "node" (node10) resolver. Nothing here is
+    // bundled or imported — it is plain browser JS checked in place — so the
+    // modern resolver is purely a formality to keep tsc happy.
+    "moduleResolution": "bundler",
     "lib": ["ES2017", "DOM", "DOM.Iterable"],
     "types": [],
     "strict": true,

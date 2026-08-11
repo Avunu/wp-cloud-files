@@ -94,6 +94,10 @@ interface WpcfPresign {
 	key: string;
 	name: string;
 	type: string;
+	/** HMAC binding `key` to this user until `expires`; required by /attachment. */
+	token: string;
+	/** Unix timestamp after which `token` is no longer accepted. */
+	expires: number;
 }
 
 /** Localized config printed by Plugin::enqueueDirectUploadScript(). */

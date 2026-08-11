@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<!--
+    Pure unit suites. No database, no MinIO, no WordPress: Brain Monkey defines
+    the WordPress functions, so this config must NOT share a bootstrap with the
+    integration suite.
+
+    Run once per WPCF_TEST_PROFILE (default / root / maxsize) because the
+    plugin's configuration lives in immutable global constants.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="tools/vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="bootstrap/unit.php"
+         colors="true"
+         beStrictAboutTestsThatDoNotTestAnything="true"
+         beStrictAboutOutputDuringTests="true"
+         failOnWarning="true"
+         failOnRisky="true"
+         cacheResultFile=".phpunit.result.cache"
+         convertDeprecationsToExceptions="true">
+    <testsuites>
+        <testsuite name="unit">
+            <directory suffix="Test.php">Unit</directory>
+        </testsuite>
+        <testsuite name="thumbnails">
+            <directory suffix="Test.php">Thumbnails</directory>
+        </testsuite>
+    </testsuites>
+
+    <groups>
+        <exclude>
+            <!-- Documents a defect that is filed but not fixed; running it would
+                 assert the broken behaviour and fail once the bug is fixed. -->
+            <group>known-defect</group>
+        </exclude>
+    </groups>
+
+    <coverage>
+        <include>
+            <directory suffix=".php">../src</directory>
+        </include>
+    </coverage>
+</phpunit>

@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<!--
+    WordPress integration suite. Needs a live MariaDB and MinIO, so it is driven
+    by tests/bin/run-integration.sh rather than run directly.
+
+    Separate from phpunit-unit.xml because PHPUnit has one bootstrap per config
+    file: this one loads real WordPress, the other one lets Brain Monkey define
+    the WordPress functions itself.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="tools/vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="bootstrap/wp.php"
+         colors="true"
+         beStrictAboutTestsThatDoNotTestAnything="true"
+         failOnWarning="true"
+         failOnRisky="true"
+         cacheResultFile=".phpunit.result.cache"
+         convertDeprecationsToExceptions="false">
+    <testsuites>
+        <testsuite name="integration">
+            <directory suffix="Test.php">Integration</directory>
+        </testsuite>
+    </testsuites>
+
+    <groups>
+        <exclude>
+            <group>known-defect</group>
+        </exclude>
+    </groups>
+
+    <coverage>
+        <include>
+            <directory suffix=".php">../src</directory>
+        </include>
+    </coverage>
+</phpunit>

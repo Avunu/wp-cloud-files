@@ -37,46 +37,44 @@ class ThumbnailHandler
     public function handleDocumentThumbnails(array $metadata, int $attachmentId): array
     {
         $mimeType = get_post_mime_type($attachmentId);
-        
+
         if (!in_array($mimeType, $this->documentTypes, true)) {
             return $metadata;
         }
-        
+
         $filePath = get_attached_file($attachmentId);
-        
+
         if (empty($filePath) || !file_exists($filePath)) {
             return $metadata;
         }
-        
+
         if (!isset($metadata['sizes'])) {
             $metadata['sizes'] = [];
         }
-        
+
         // Get registered image sizes to match WordPress behavior
         $sizes = $this->getImageSizes();
         $attachmentDir = dirname($filePath);
         $originalFilename = pathinfo($filePath, PATHINFO_FILENAME);
-        
-        foreach ($sizes as $sizeName => $dimensions) {
-            // Skip if this size already exists
-            if (isset($metadata['sizes'][$sizeName])) {
+
+        // Only ask for the sizes that are actually missing, and render them in a
+        // single pass — the document→PDF conversion is the expensive part and is
+        // identical for every size.
+        $wanted = array_diff_key($sizes, $metadata['sizes']);
+        if ($wanted === []) {
+            return $metadata;
+        }
+
+        $thumbnails = $this->getThumbnailer()->generateThumbnails($filePath, $mimeType, $wanted);
+
+        foreach ($thumbnails as $sizeName => $thumbnailPath) {
+            if (!file_exists($thumbnailPath)) {
                 continue;
             }
-            
-            $thumbnailPath = $this->getThumbnailer()->generateThumbnail(
-                $filePath,
-                $mimeType,
-                $dimensions['width'],
-                $dimensions['height']
-            );
-            
-            if (!$thumbnailPath || !file_exists($thumbnailPath)) {
-                continue;
-            }
-            
+
             $thumbnailFilename = "{$originalFilename}-{$sizeName}.jpg";
             $thumbnailDestPath = "{$attachmentDir}/{$thumbnailFilename}";
-            
+
             if (rename($thumbnailPath, $thumbnailDestPath)) {
                 $imgDimensions = getimagesize($thumbnailDestPath);
                 if ($imgDimensions) {
@@ -86,7 +84,7 @@ class ThumbnailHandler
                         'height'    => $imgDimensions[1],
                         'mime-type' => 'image/jpeg',
                     ];
-                    
+
                     // WordPress expects filesize for full size previews
                     if ($sizeName === 'full') {
                         $metadata['sizes'][$sizeName]['filesize'] = filesize($thumbnailDestPath);
@@ -96,12 +94,25 @@ class ThumbnailHandler
                 @unlink($thumbnailPath);
             }
         }
-        
+
         return $metadata;
     }
-    
+
     /**
      * Get image sizes to generate, including 'full' for media library preview.
+     *
+     * Static and public because `wp wp-cloud-files regenerate-thumbnails` has to
+     * produce exactly the same set; it used to keep its own copy of this table.
+     *
+     * @return array<string, array{width: int, height: int}>
+     */
+    public static function documentPreviewSizes(): array
+    {
+        return (new self())->getImageSizes();
+    }
+
+    /**
+     * @return array<string, array{width: int, height: int}>
      */
     private function getImageSizes(): array
     {
@@ -124,7 +135,7 @@ class ThumbnailHandler
             ],
         ];
     }
-    
+
     /**
      * Prepare attachment data for JavaScript.
      * Ensures document thumbnails appear in the media library.
@@ -134,10 +145,19 @@ class ThumbnailHandler
         if (empty($meta['sizes']) || !in_array($attachment->post_mime_type, $this->documentTypes, true)) {
             return $response;
         }
-        
+
+        // wp_get_attachment_url() returns false when the attachment has no
+        // _wp_attached_file. dirname(false) coerces to dirname('') === '', which
+        // would turn every size into a site-root-relative "/thumb.jpg"; leaving
+        // the response alone keeps WordPress' generic document icon instead.
         $fileUrl = wp_get_attachment_url($attachment->ID);
+        if (!is_string($fileUrl) || $fileUrl === '') {
+            return $response;
+        }
+
         $baseUrl = dirname($fileUrl);
-        
+
+
         foreach (['full', 'thumbnail', 'medium', 'large'] as $size) {
             if (!empty($meta['sizes'][$size])) {
                 $response['sizes'][$size] = [
@@ -145,13 +165,13 @@ class ThumbnailHandler
                     'width'  => $meta['sizes'][$size]['width'],
                     'height' => $meta['sizes'][$size]['height'],
                 ];
-                
+
                 if ($size === 'thumbnail') {
                     $response['icon'] = $baseUrl . '/' . $meta['sizes'][$size]['file'];
                 }
             }
         }
-        
+
         return $response;
     }
 }

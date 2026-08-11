@@ -52,7 +52,7 @@ class Plugin
             // UI is accurate and Plupload doesn't reject large files client-side.
             add_filter('upload_size_limit', [$this, 'filterUploadSizeLimit']);
         }
-        
+
         // // Handle image editing (in case it bypasses normal upload flow)
         // add_action('wp_ajax_image-editor', function() use ($mediaHandler) {
         //     add_filter('wp_update_attachment_metadata', function($metadata, $attachment_id) use ($mediaHandler) {
@@ -60,8 +60,9 @@ class Plugin
         //     }, 999, 2);
         // }, 1);
 
-        // Handle content URL rewrites
-        // add_filter('the_content', [$urlRewriter, 'rewriteContentUrls'], 10);
+        // No the_content filter: rewriting URLs on every page render is both
+        // slower and less complete than `wp wp-cloud-files migrate-urls`, which
+        // does a one-time search-replace over the database.
     }
 
     private static function directUploadsEnabled(): bool

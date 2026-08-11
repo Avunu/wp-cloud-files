@@ -20,6 +20,20 @@ class RestController
 {
     private const NAMESPACE = 'wp-cloud-files/v1';
 
+    /**
+     * Upper bound on the S3 collision-suffix search. Each attempt is a network
+     * round trip, so an unbounded loop lets any user with upload_files amplify a
+     * single presign into arbitrarily many remote calls inside one request.
+     */
+    private const MAX_KEY_ATTEMPTS = 100;
+
+    /**
+     * An uploads-relative key: an optional YYYY/MM/ prefix and then a bare
+     * filename. The prefix is optional because uploads_use_yearmonth_folders can
+     * be turned off.
+     */
+    private const KEY_PATTERN = '#^(\d{4}/\d{2}/)?[^/]+$#';
+
     public function register(): void
     {
         register_rest_route(self::NAMESPACE, '/presign', [
@@ -52,8 +66,10 @@ class RestController
         }
 
         // Trust the extension, not the client-sent mime type. wp_check_filetype()
-        // resolves the canonical type against the current user's allowed types
-        // (which already respects the unfiltered_upload capability).
+        // resolves the canonical type against get_allowed_mime_types(), which
+        // varies with the unfiltered_html capability. Note it does NOT sniff the
+        // bytes -- the server never sees them on this path -- so this is an
+        // extension allowlist, not content validation.
         $filetype = wp_check_filetype($filename);
         if (empty($filetype['type'])) {
             return new WP_Error('wpcf_disallowed_type', 'This file type is not allowed.', ['status' => 403]);
@@ -71,12 +87,45 @@ class RestController
 
         $uploadUrl = S3Client::getInstance()->createPresignedPutUrl($key, $type, $expires);
 
+        // Bind the key to this user for the life of the presign. Without it,
+        // /attachment will accept any key at all -- see createAttachment().
+        $expiresAt = strtotime($expires) ?: (time() + 900);
+
         return new WP_REST_Response([
             'uploadUrl' => $uploadUrl,
             'key'       => $key,
             'name'      => wp_basename($key),
             'type'      => $type,
+            'token'     => $this->signKey($key, $expiresAt),
+            'expires'   => $expiresAt,
         ]);
+    }
+
+    /**
+     * Sign an object key for the current user until $expires.
+     *
+     * Stateless on purpose. A transient would be evicted unpredictably under an
+     * external object cache (set_transient defers to wp_cache_set, which Redis
+     * and Memcached may drop under LRU pressure mid-upload), and a nonce lives
+     * for 12-24 hours, which is 48-96x the presign window and cannot be narrowed
+     * without the site-wide nonce_life filter.
+     *
+     * Binding to the user id means one user's token is useless to another.
+     * Replaying your own token only re-mints your own key, so no stored state is
+     * required to make this safe.
+     */
+    private function signKey(string $key, int $expires): string
+    {
+        return wp_hash(get_current_user_id() . '|' . $key . '|' . $expires, 'nonce', 'sha256');
+    }
+
+    private function verifyKey(string $key, string $token, int $expires): bool
+    {
+        if ($token === '' || $expires <= time()) {
+            return false;
+        }
+
+        return hash_equals($this->signKey($key, $expires), $token);
     }
 
     /**
@@ -85,14 +134,34 @@ class RestController
      */
     public function createAttachment(WP_REST_Request $request)
     {
-        $key   = ltrim((string) $request->get_param('key'), '/');
-        $size  = (int) $request->get_param('size');
-        $title = sanitize_text_field((string) $request->get_param('title'));
-        $post  = (int) $request->get_param('post');
+        $key     = ltrim((string) $request->get_param('key'), '/');
+        $token   = (string) $request->get_param('token');
+        $expires = (int) $request->get_param('expires');
+        $title   = sanitize_text_field((string) $request->get_param('title'));
+        $post    = (int) $request->get_param('post');
 
         // Reject path traversal / absolute escapes.
         if ($key === '' || strpos($key, '..') !== false) {
             return new WP_Error('wpcf_bad_key', 'Invalid object key.', ['status' => 400]);
+        }
+
+        // Defence in depth behind the token: keep the key inside the uploads
+        // layout so a signing mistake cannot reach the rest of the bucket.
+        if (!preg_match(self::KEY_PATTERN, $key)) {
+            return new WP_Error('wpcf_bad_key', 'Invalid object key.', ['status' => 400]);
+        }
+
+        // The key must be one THIS user was issued a presign for. Without this
+        // check any user with upload_files could name an arbitrary object and
+        // have it registered as their own attachment -- which exposes it via a
+        // public URL and, because deleting an attachment deletes the underlying
+        // object, lets them destroy arbitrary bucket contents.
+        if (!$this->verifyKey($key, $token, $expires)) {
+            return new WP_Error(
+                'wpcf_bad_token',
+                'This upload could not be verified. Please reload the page and try again.',
+                ['status' => 403]
+            );
         }
 
         // Re-validate the type from the key itself; never trust a client mime.
@@ -101,6 +170,16 @@ class RestController
             return new WP_Error('wpcf_disallowed_type', 'This file type is not allowed.', ['status' => 403]);
         }
         $type = $filetype['type'];
+
+        // Same check core's attachment controller makes: being able to upload
+        // does not imply being able to attach media to someone else's post.
+        if ($post > 0 && !current_user_can('edit_post', $post)) {
+            return new WP_Error(
+                'rest_cannot_edit',
+                'Sorry, you are not allowed to upload media to this post.',
+                ['status' => 403]
+            );
+        }
 
         $s3 = S3Client::getInstance();
 
@@ -136,9 +215,12 @@ class RestController
         // S3 and must not be re-uploaded from the server.
         update_post_meta($attachmentId, '_wpcf_direct_upload_key', $key);
 
+        // Read the size from S3 rather than believing the browser.
         $metadata = ['file' => $key];
-        if ($size > 0) {
-            $metadata['filesize'] = $size;
+        try {
+            $metadata['filesize'] = $s3->getFilesystem()->fileSize($key);
+        } catch (\Throwable $e) {
+            // Not fatal: the optimizer fills metadata in properly later.
         }
 
         if (DirectUploadProcessor::isOptimizable($type)) {
@@ -173,18 +255,34 @@ class RestController
         $s3 = S3Client::getInstance();
         $ext = pathinfo($filename, PATHINFO_EXTENSION);
         $base = $ext !== '' ? substr($filename, 0, -(strlen($ext) + 1)) : $filename;
-        $suffix = 1;
+
+        $withSuffix = static fn(string $suffix): string => $ext !== ''
+            ? "{$base}-{$suffix}.{$ext}"
+            : "{$base}-{$suffix}";
 
         try {
-            while ($s3->getFilesystem()->fileExists($key)) {
-                $candidate = $ext !== '' ? "{$base}-{$suffix}.{$ext}" : "{$base}-{$suffix}";
-                $key = $makeKey($candidate);
-                $suffix++;
+            // Bounded: each iteration is a network HEAD, so a long collision
+            // chain would otherwise turn one presign into an unbounded number of
+            // remote calls inside a synchronous request.
+            for ($suffix = 1; $suffix <= self::MAX_KEY_ATTEMPTS; $suffix++) {
+                if (!$s3->getFilesystem()->fileExists($key)) {
+                    return $key;
+                }
+
+                $key = $makeKey($withSuffix((string) $suffix));
             }
         } catch (\Throwable $e) {
-            // If existence checks fail, fall back to the locally-unique name.
+            // Existence checks are unavailable. Falling through to the plain
+            // name here would silently overwrite whatever is already at that key
+            // whenever S3 is briefly unhealthy, so take the random suffix below.
         }
 
-        return $key;
+        // Either the chain is pathologically long or S3 could not be queried.
+        // A random suffix is collision-safe without another round trip.
+        //
+        // Note this loop reserves nothing, so two concurrent presigns for the
+        // same filename can still agree on a key; the random fallback narrows
+        // that window but closing it entirely needs a reservation record.
+        return $makeKey($withSuffix(bin2hex(random_bytes(4))));
     }
 }

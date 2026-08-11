@@ -125,9 +125,11 @@
 				method: 'POST',
 				data: {
 					key: presign.key,
-					name: presign.name,
-					type: presign.type,
-					size: file.size,
+					// Proves this key was presigned for this user; the server
+					// rejects the request without it. name/type/size are gone —
+					// the server derives all three itself and never read them.
+					token: presign.token,
+					expires: presign.expires,
 					title: file.name,
 					post: postId
 				}

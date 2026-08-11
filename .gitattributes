@@ -1,0 +1,3 @@
+# Test fixtures are real documents/images. Mark them binary so a future
+# `text=auto` never mangles them and diffs stay readable.
+tests/fixtures/** binary

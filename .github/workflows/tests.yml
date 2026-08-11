@@ -1,0 +1,214 @@
+name: Tests
+
+# Reusable: called by ci.yml on pull requests and by release.yml as the gate
+# that must pass before a zip is built and attached to a release.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  # ------------------------------------------------------------------ #
+  # Resolve which WordPress versions to test.                          #
+  #                                                                     #
+  # The declared version comes from the index.php plugin header, which  #
+  # is the single source of truth: plugin-update-checker reads that     #
+  # file from the git tag, so it is what users actually see.            #
+  # ------------------------------------------------------------------ #
+  versions:
+    name: Resolve WordPress versions
+    runs-on: ubuntu-latest
+    outputs:
+      declared: ${{ steps.wp.outputs.declared }}
+      legs: ${{ steps.wp.outputs.legs }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: wp
+        run: |
+          set -euo pipefail
+
+          header() {
+            sed -n -E "s|^[[:space:]]*\* $1:[[:space:]]*([^[:space:]]+)[[:space:]]*$|\1|p" index.php
+          }
+
+          declared=$(header 'Tested up to')
+          minimum=$(header 'Requires at least')
+
+          # plugin-update-checker's fixSupportedWordpressVersion() silently
+          # discards anything that is not bare major.minor, and WordPress then
+          # shows "Compatibility: Unknown".
+          for v in "$declared" "$minimum"; do
+            [[ "$v" =~ ^[0-9]+\.[0-9]+$ ]] \
+              || { echo "::error file=index.php::'$v' must be bare major.minor"; exit 1; }
+          done
+
+          latest=$(curl -fsSL https://api.wordpress.org/core/version-check/1.7/ \
+                   | jq -r '.offers[0].current' | cut -d. -f1,2)
+
+          previous=$(curl -fsSL https://api.wordpress.org/core/stable-check/1.0/ \
+                     | jq -r 'keys[]' | cut -d. -f1,2 | sort -uV \
+                     | awk -v l="$latest" '$0==l { print prev; exit } { prev=$0 }')
+
+          # The declared leg is required: it is the compatibility the plugin
+          # advertises. The minimum leg proves "Requires at least" too.
+          legs=$(jq -cn \
+            --arg d "$declared" --arg m "$minimum" --arg l "$latest" --arg p "$previous" '
+            [ {wp:$d, role:"declared"},
+              {wp:$m, role:"minimum"},
+              {wp:$l, role:"latest"},
+              {wp:$p, role:"previous"},
+              {wp:"trunk", role:"nightly"} ]
+            | map(select(.wp != "" and .wp != null))
+            | unique_by(.wp)')
+
+          echo "declared=$declared" >> "$GITHUB_OUTPUT"
+          echo "legs=$legs" >> "$GITHUB_OUTPUT"
+
+          echo "Declared: $declared (minimum $minimum), latest released: $latest"
+          echo "Matrix: $legs"
+
+          if [ "$latest" != "$declared" ]; then
+            echo "::notice title=WordPress $latest is available::index.php declares 'Tested up to: $declared'. If the $latest leg passes, bump the header to advertise it."
+          fi
+
+  # ------------------------------------------------------------------ #
+  # Pure Nix derivations: no services, no impure eval.                  #
+  # ------------------------------------------------------------------ #
+  checks:
+    name: check / ${{ matrix.check }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - plugin-header
+          - phpstan
+          - phpcs
+          - unit
+          - thumbnails
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            extra-substituters = https://devenv.cachix.org
+            extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
+
+      - name: Cache /nix/store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-checks-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'tests/tools/composer.lock') }}
+          restore-prefixes-first-match: nix-checks-${{ runner.os }}-
+          gc-max-store-size-linux: 5G
+          purge: true
+          purge-prefixes: nix-checks-${{ runner.os }}-
+          purge-created: 604800
+          purge-primary-key: never
+
+      # The dominant cold-start cost is NOT the store: evaluating the package set
+      # performs ~44 full-history builtins.fetchGit clones (composition-c4 fetches
+      # lock.packages ++ lock.packages-dev with allRefs=true). No binary cache
+      # touches ~/.cache/nix/gitv3.
+      - name: Cache Nix git fetches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/nix/gitv3
+            ~/.cache/nix/fetcher-cache-v*.sqlite*
+          key: nix-fetchgit-${{ hashFiles('composer.lock', 'tests/tools/composer.lock') }}
+          restore-keys: nix-fetchgit-
+
+      # NOT `nix flake check`: it evaluates devShells in pure mode and hits
+      # devenv's `devenv.root = builtins.getEnv "PWD"` assertion.
+      - run: nix build -L --no-link ".#checks.x86_64-linux.${{ matrix.check }}"
+
+  # ------------------------------------------------------------------ #
+  # WordPress integration: real MariaDB + real MinIO, both from devenv. #
+  # ------------------------------------------------------------------ #
+  integration:
+    name: WordPress ${{ matrix.leg.wp }} (${{ matrix.leg.role }})
+    needs: versions
+    runs-on: ubuntu-latest
+    # A continue-on-error job still reports success to downstream `needs`, so a
+    # broken WordPress trunk can never block a release.
+    continue-on-error: ${{ matrix.leg.role == 'nightly' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: ${{ fromJSON(needs.versions.outputs.legs) }}
+    env:
+      WP_VERSION: ${{ matrix.leg.wp }}
+      # The type check has its own job below, and it does not vary by WordPress
+      # version; running it in every matrix leg would just repeat `npm ci`.
+      WPCF_SUITES: unit thumbnails integration
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            extra-substituters = https://devenv.cachix.org
+            extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
+
+      - name: Cache /nix/store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-ci-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**') }}
+          restore-prefixes-first-match: nix-ci-${{ runner.os }}-
+          gc-max-store-size-linux: 5G
+          purge: true
+          purge-prefixes: nix-ci-${{ runner.os }}-
+          purge-created: 604800
+          purge-primary-key: never
+
+      - name: Cache Nix git fetches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/nix/gitv3
+            ~/.cache/nix/fetcher-cache-v*.sqlite*
+          key: nix-fetchgit-${{ hashFiles('composer.lock', 'tests/tools/composer.lock') }}
+          restore-keys: nix-fetchgit-
+
+      # One wordpress-develop tarball gives both core (src/) and the PHPUnit
+      # suite (tests/phpunit). trunk is keyed per-run so nightly is never stale.
+      - name: Cache WordPress
+        uses: actions/cache@v4
+        with:
+          path: .devenv/state/wordpress
+          key: wp-${{ matrix.leg.wp }}-${{ matrix.leg.role == 'nightly' && github.run_id || 'pinned' }}
+          restore-keys: wp-${{ matrix.leg.wp }}-
+
+      # --impure is required: devenv reads PWD/XDG_RUNTIME_DIR via getEnv.
+      # devenv-flake-test, NOT `devenv test` -- the latter re-execs
+      # `nix develop .#default` and would silently run the wrong shell.
+      - name: Run unit + integration suites
+        run: nix develop .#ci --impure -L --command devenv-flake-test
+
+      - name: Upload service logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-wp-${{ matrix.leg.wp }}
+          path: |
+            .devenv/state/process-compose/
+            .devenv/state/mysql/*.err
+          if-no-files-found: ignore
+
+  # ------------------------------------------------------------------ #
+  # The one existing quality gate that was never wired up.              #
+  # ------------------------------------------------------------------ #
+  types:
+    name: check / typescript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check:types
