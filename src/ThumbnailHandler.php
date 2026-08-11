@@ -135,9 +135,18 @@ class ThumbnailHandler
             return $response;
         }
         
+        // wp_get_attachment_url() returns false when the attachment has no
+        // _wp_attached_file. dirname(false) coerces to dirname('') === '', which
+        // would turn every size into a site-root-relative "/thumb.jpg"; leaving
+        // the response alone keeps WordPress' generic document icon instead.
         $fileUrl = wp_get_attachment_url($attachment->ID);
+        if (!is_string($fileUrl) || $fileUrl === '') {
+            return $response;
+        }
+
         $baseUrl = dirname($fileUrl);
-        
+
+
         foreach (['full', 'thumbnail', 'medium', 'large'] as $size) {
             if (!empty($meta['sizes'][$size])) {
                 $response['sizes'][$size] = [

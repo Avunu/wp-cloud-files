@@ -16,6 +16,18 @@ updates:
     schedule:
       interval: "daily"
 
+  # The test toolchain is a separate Composer project on purpose (see
+  # tests/tools/composer.json); without its own entry the lock silently rots.
+  - package-ecosystem: "composer"
+    directory: "/tests/tools"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: chore
+    groups:
+      test-tools:
+        patterns: ["*"]
+
   - package-ecosystem: nix
     directory: /
     schedule:

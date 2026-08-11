@@ -9,6 +9,8 @@
  * Author: Avunu
  * Author URI: https://avunu.io/
  * Requires PHP: 8.3
+ * Requires at least: 6.6
+ * Tested up to: 7.0
  */
 
 declare(strict_types=1);
@@ -81,9 +83,12 @@ add_action('plugins_loaded', function() {
 });
 
 // Register activation hook to check requirements
+// Must stay in step with the "Requires PHP" header and composer.json: a lower
+// bound here let PHP 8.1/8.2 sites activate cleanly and then fatal at runtime on
+// dependencies that need 8.3.
 register_activation_hook(__FILE__, function() {
-    if (version_compare(PHP_VERSION, '8.1', '<')) {
+    if (version_compare(PHP_VERSION, '8.3', '<')) {
         deactivate_plugins(plugin_basename(__FILE__));
-        wp_die('WP Cloud Files requires PHP 8.1 or higher.');
+        wp_die('WP Cloud Files requires PHP 8.3 or higher.');
     }
 });

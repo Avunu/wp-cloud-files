@@ -4,3 +4,10 @@ node_modules
 .direnv
 result
 wp-cloud-files.zip
+
+# Test artefacts. `vendor` above has no leading slash, so it already covers
+# tests/tools/vendor.
+.phpunit.result.cache
+coverage/
+tests/.plugin-dir
+tests/.wp

@@ -64,7 +64,12 @@ class DocumentThumbnailer
 
     private function setupDomPdf(): void
     {
-        $domPdfPath = WP_PLUGIN_DIR . '/wp-cloud-files/vendor/dompdf/dompdf';
+        // Resolve relative to this file, not to WP_PLUGIN_DIR plus a hardcoded
+        // directory name: installing the plugin under any other folder name (or
+        // symlinking it, as the test harness and most dev setups do) left DomPDF
+        // silently unconfigured, and every Word/Excel thumbnail then failed with
+        // nothing but a WP_DEBUG log line to show for it.
+        $domPdfPath = dirname(__DIR__) . '/vendor/dompdf/dompdf';
         if (file_exists($domPdfPath)) {
             WordSettings::setPdfRendererPath($domPdfPath);
             WordSettings::setPdfRendererName(WordSettings::PDF_RENDERER_DOMPDF);

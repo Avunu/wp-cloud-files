@@ -1,10 +1,11 @@
 name: Release
 
 # Release Please maintains a release PR from Conventional Commits on main.
-# Merging that PR bumps composer.json + VERSION + CHANGELOG.md, creates the tag
-# and GitHub Release (with auto-generated notes), then this job builds the plugin
-# zip with Nix and attaches it as the release asset that client sites self-update
-# from via plugin-update-checker.
+# Merging that PR bumps composer.json + index.php + CHANGELOG.md, creates the tag
+# and GitHub Release (with auto-generated notes). The full test suite then runs
+# against the tagged commit and, only if it passes, the plugin zip is built with
+# Nix and attached as the release asset that client sites self-update from via
+# plugin-update-checker.
 on:
   push:
     branches:
@@ -17,6 +18,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Release Please
         id: release
@@ -25,22 +29,67 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Uses release-please-config.json + .release-please-manifest.json.
 
-      # The remaining steps run only when a release was actually created
-      # (i.e. the release PR was merged). The root package uses unprefixed outputs.
+  # The gate. `needs` on a matrix job waits for every leg, and the leg pinned to
+  # the "Tested up to" version in index.php is required -- so the plugin can only
+  # ship a compatibility claim that CI just proved. The nightly leg is
+  # continue-on-error and cannot block.
+  #
+  # ci.yml already ran this on the release PR, so this is normally a fast
+  # re-confirmation against the tagged commit.
+  tests:
+    needs: release
+    if: ${{ needs.release.outputs.release_created }}
+    uses: ./.github/workflows/tests.yml
+
+  publish:
+    needs: [release, tests]
+    if: ${{ needs.release.outputs.release_created }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
       - uses: actions/checkout@v7
-        if: ${{ steps.release.outputs.release_created }}
 
       - uses: DeterminateSystems/nix-installer-action@main
-        if: ${{ steps.release.outputs.release_created }}
+
+      - name: Cache Nix git fetches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/nix/gitv3
+            ~/.cache/nix/fetcher-cache-v*.sqlite*
+          key: nix-fetchgit-${{ hashFiles('composer.lock', 'tests/tools/composer.lock') }}
+          restore-keys: nix-fetchgit-
 
       - name: Build plugin zip
-        if: ${{ steps.release.outputs.release_created }}
         run: nix build .#zip -L
 
       - name: Attach zip to release
-        if: ${{ steps.release.outputs.release_created }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ steps.release.outputs.tag_name }}" \
+          gh release upload "${{ needs.release.outputs.tag_name }}" \
             result/wp-cloud-files.zip --clobber
+
+  # Release Please tags and publishes the GitHub Release before the suite runs,
+  # so a failure leaves a Release with no zip attached. Make that loud rather
+  # than silent; re-running the workflow after a fix attaches the asset.
+  notify-failure:
+    needs: [release, tests, publish]
+    if: ${{ always() && needs.release.outputs.release_created && (needs.tests.result == 'failure' || needs.publish.result == 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release.outputs.tag_name }}
+        run: |
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Release $TAG has no zip asset" \
+            --body "The release \`$TAG\` was tagged and published, but the test suite or the zip build failed, so no \`wp-cloud-files.zip\` was attached.
+
+          Sites using plugin-update-checker will not be able to update until an asset exists.
+
+          Fix the failure, then re-run [this workflow run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."

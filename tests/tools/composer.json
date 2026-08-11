@@ -1,0 +1,19 @@
+{
+    "name": "avunu/wp-cloud-files-test-tools",
+    "description": "Test runners for wp-cloud-files. Deliberately separate from the plugin's own composer.json: composition-c4's fetchComposerDeps clones lock.packages ++ lock.packages-dev at eval time with allRefs=true, so anything added to the root manifest is paid for on every `nix build .#zip`. Static analysers are NOT here either -- phpstan and php-codesniffer come from nixpkgs, and the WordPress stubs are fetched as a single file (php-stubs/wordpress-stubs carries a multi-megabyte generated file per WP tag).",
+    "license": "GPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "phpunit/phpunit": "^9.6",
+        "yoast/phpunit-polyfills": "^1.1",
+        "brain/monkey": "^2.6",
+        "mockery/mockery": "^1.6"
+    },
+    "config": {
+        "platform": {
+            "php": "8.3"
+        },
+        "allow-plugins": false,
+        "sort-packages": true
+    }
+}
