@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.1](https://github.com/Avunu/wp-cloud-files/compare/v0.4.0...v0.4.1) (2026-08-21)
+
+
+### Miscellaneous Chores
+
+* bump aws/aws-sdk-php from 3.392.3 to 3.393.0 ([1862580](https://github.com/Avunu/wp-cloud-files/commit/1862580c3106dd2934e882fe9adf456ecc22a0b5))
+* bump aws/aws-sdk-php from 3.392.3 to 3.393.0 ([9b4c925](https://github.com/Avunu/wp-cloud-files/commit/9b4c9252351eb0eaa44a63f97d2d15774b741a45))
+* bump mockery/mockery from 1.6.12 to 1.6.13 in /tests/tools in the test-tools group ([a6d8d26](https://github.com/Avunu/wp-cloud-files/commit/a6d8d26f17998aef845139df66a28fb8ac64e461))
+* bump mockery/mockery in /tests/tools in the test-tools group ([7f115ac](https://github.com/Avunu/wp-cloud-files/commit/7f115acbaa57e286e168dbf435a8b83b927dd0c0))
+* bump the nix group with 2 updates ([4593756](https://github.com/Avunu/wp-cloud-files/commit/459375642dab7ed7509594292e39e22c11f4e7e2))
+* bump the nix group with 2 updates ([b8e88c4](https://github.com/Avunu/wp-cloud-files/commit/b8e88c41f04963b1685ccafd3433cf6f7590048f))
+* **deps:** bump aws/aws-sdk-php from 3.391.2 to 3.392.3 ([b653270](https://github.com/Avunu/wp-cloud-files/commit/b65327009b8fbd97aa0cb2f2dc78505efc3dc79e))
+* **deps:** bump aws/aws-sdk-php from 3.391.2 to 3.392.3 ([ad128e8](https://github.com/Avunu/wp-cloud-files/commit/ad128e81213142e61e03e2c575f15ab1a0bb08ca))
+
 ## [0.4.0](https://github.com/Avunu/wp-cloud-files/compare/v0.3.2...v0.4.0) (2026-08-11)
 
 
