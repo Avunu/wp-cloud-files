@@ -87,6 +87,16 @@ define('S3_UPLOAD_ACL', 'public-read');   // Sign this ACL on the PUT. Omit for 
 define('S3_PRESIGN_EXPIRES', '+15 minutes'); // Presigned URL lifetime (default '+15 minutes')
 ```
 
+### Without credentials (development)
+
+Outside production (`WP_ENVIRONMENT_TYPE` other than `production`), `S3_KEY` and
+`S3_SECRET` are optional. With only `S3_BUCKET`, `S3_ENDPOINT` and `S3_PUBLIC_URL`
+defined the plugin runs **read-only**: the site's existing media is served from the
+public URL, new uploads stay in `wp-content/uploads`, and nothing is written to or
+deleted from the bucket — so a development checkout renders the site without holding
+a key that could write to the production bucket. wp-admin says so. In production the
+credentials are required as before.
+
 ## Direct Browser-to-S3 Uploads
 
 By default, uploads flow browser → web server → S3, so a proxy or PHP limit in
