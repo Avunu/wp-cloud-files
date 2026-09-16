@@ -7,24 +7,62 @@ use Avunu\WPCloudFiles\DirectUpload\RestController;
 
 class Plugin
 {
-    public static function boot(): void
+    /**
+     * Full mode: serve from S3 and store to it.
+     */
+    public const MODE_FULL = 'full';
+
+    /**
+     * Read-only mode: existing media is served from S3_PUBLIC_URL; new uploads
+     * stay local, nothing is written to or deleted from the bucket.
+     */
+    public const MODE_READ_ONLY = 'read-only';
+
+    /**
+     * Which mode the defined constants allow, or null for "not configured".
+     *
+     * Serving needs the bucket, the endpoint and the public URL; storing needs
+     * credentials as well. Outside production, credentials are optional: a
+     * development checkout renders the site's existing media from the public
+     * URL without holding a key that could write to the production bucket.
+     */
+    public static function configuredMode(): ?string
     {
-        $instance = new self();
-        $instance->registerHooks();
+        $canServe = defined('S3_BUCKET') && defined('S3_ENDPOINT') && defined('S3_PUBLIC_URL');
+        $canStore = defined('S3_KEY') && defined('S3_SECRET');
+        if ($canServe && $canStore) {
+            return self::MODE_FULL;
+        }
+        if ($canServe && wp_get_environment_type() !== 'production') {
+            return self::MODE_READ_ONLY;
+        }
+        return null;
     }
 
-    private function registerHooks(): void
+    public static function boot(string $mode = self::MODE_FULL): void
     {
-        // Initialize our handlers
-        $mediaHandler = new MediaHandler();
-        $urlRewriter = new UrlRewriter();
-        $thumbnailHandler = new ThumbnailHandler();
+        $instance = new self();
+        $instance->registerHooks($mode === self::MODE_READ_ONLY);
+    }
 
-        // URL rewriting for attachments
+    private function registerHooks(bool $readOnly = false): void
+    {
+        // URL rewriting for attachments: needs only S3_PUBLIC_URL, so it is the
+        // whole of read-only mode.
+        $urlRewriter = new UrlRewriter();
         add_filter('wp_get_attachment_url', [$urlRewriter, 'rewriteAttachmentUrl'], 10, 2);
 
         // Handle image srcset URLs
         add_filter('wp_calculate_image_srcset', [$urlRewriter, 'rewriteSrcsetUrls'], 10, 5);
+
+        if ($readOnly) {
+            add_action('admin_notices', [$this, 'readOnlyNotice']);
+            return;
+        }
+
+        // Initialize the handlers that write to the bucket.
+        $mediaHandler = new MediaHandler();
+        $thumbnailHandler = new ThumbnailHandler();
 
         // Process complete media after WordPress is done with it
         add_filter('wp_update_attachment_metadata', [$mediaHandler, 'processMedia'], 999, 2);
@@ -63,6 +101,21 @@ class Plugin
         // No the_content filter: rewriting URLs on every page render is both
         // slower and less complete than `wp wp-cloud-files migrate-urls`, which
         // does a one-time search-replace over the database.
+    }
+
+    /**
+     * Say so in wp-admin: uploads made here stay local, on purpose.
+     */
+    public function readOnlyNotice(): void
+    {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        printf(
+            '<div class="notice notice-info"><p><strong>%s</strong> %s</p></div>',
+            esc_html__('WP Cloud Files is read-only in this environment:', 'wp-cloud-files'),
+            esc_html__('existing media is served from S3_PUBLIC_URL; new uploads stay local. Define S3_KEY and S3_SECRET to store to the bucket.', 'wp-cloud-files')
+        );
     }
 
     private static function directUploadsEnabled(): bool

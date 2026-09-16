@@ -72,14 +72,9 @@ if (defined('WP_CLI') && WP_CLI) {
 
 // Bootstrap the plugin
 add_action('plugins_loaded', function () {
-    if (
-        defined('S3_KEY') &&
-        defined('S3_SECRET') &&
-        defined('S3_BUCKET') &&
-        defined('S3_ENDPOINT') &&
-        defined('S3_PUBLIC_URL')
-    ) {
-        Avunu\WPCloudFiles\Plugin::boot();
+    $mode = Avunu\WPCloudFiles\Plugin::configuredMode();
+    if ($mode !== null) {
+        Avunu\WPCloudFiles\Plugin::boot($mode);
     } else {
         add_action('admin_notices', function () {
             echo '<div class="error"><p>';
