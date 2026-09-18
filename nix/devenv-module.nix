@@ -78,6 +78,15 @@ in
     ];
   };
 
+  # Under process-compose, a process whose `ready` config has no `timeout` is
+  # handed to process-compose's own policy (supervisionMode = "external"),
+  # and devenv then reports it Ready the instant it is spawned without ever
+  # running the exec probe -- so devenv:mysql:configure (which creates
+  # initialDatabases) races mariadbd's actual startup instead of waiting on
+  # it. Setting `timeout` keeps devenv supervising mysql itself, so the probe
+  # actually runs and the databases get created after mariadbd is really up.
+  processes.mysql.ready.timeout = 60;
+
   services.minio = {
     enable = true;
     accessKey = "wpcftestkey";

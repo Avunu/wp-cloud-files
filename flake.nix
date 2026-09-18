@@ -429,12 +429,23 @@
                 EOF
 
                 export HOME="$TMPDIR"
+                # Unlike gutenberg-downgrade and wordpress-sqlite-anywhere,
+                # wordpress-stubs.php is fetched as a raw fetchurl file rather
+                # than the php-stubs/wordpress-stubs Composer package (see the
+                # comment on wordpressStubs above), so it never gets a "dist"
+                # entry in installed.json for PHPStan >= 2.2.13's path-package
+                # detection (phpstan-src#6356) to mistrigger on -- installed.json
+                # here has no path packages at all. The scanFiles route is what
+                # costs memory instead: with no locked package version to hang a
+                # cache key on, PHPStan >= 2.2.13 parses and reflects the whole
+                # 5.5 MB stub file to export its nodes for the result cache on
+                # every run, which alone needs a bit over 2G. 3G leaves headroom.
                 phpstan analyse \
                   -c tests/phpstan-nix.neon \
                   --no-progress \
                   --error-format=table \
                   --autoload-file=vendor/autoload.php \
-                  --memory-limit=2G
+                  --memory-limit=3G
 
                 touch "$out"
               '';
