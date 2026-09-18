@@ -397,10 +397,7 @@
           phpstan =
             pkgs.runCommand "check-phpstan"
               {
-                nativeBuildInputs = [
-                  php
-                  (pkgs.phpstan.override { inherit php; })
-                ];
+                nativeBuildInputs = [ (pkgs.phpstan.override { inherit php; }) ];
                 src = self;
               }
               ''
@@ -420,26 +417,6 @@
                 cp -rL ${pluginDir}/vendor ./vendor
                 chmod -R u+w ./vendor
 
-                # composition-c4 installs every package from a path repository into
-                # the store, and installed.json records them as `"dist": {"type":
-                # "path"}`. PHPStan >= 2.2.13 reads a path package as project code
-                # edited in place and tracks its files one by one instead of by
-                # package (phpstan-src#6356); after the analysis its main process then
-                # parses and reflects each of those files to record their exported
-                # nodes for the result cache -- the WordPress stubs included, past
-                # the memory limit. The copy above is a plain install, not a path
-                # one, so drop the claim.
-                php -r '
-                  $file = "vendor/composer/installed.json";
-                  $installed = json_decode(file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
-                  foreach ($installed["packages"] as &$package) {
-                    if (($package["dist"]["type"] ?? null) === "path") {
-                      unset($package["dist"]);
-                    }
-                  }
-                  file_put_contents($file, json_encode($installed, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-                '
-
                 # The stub paths are store paths, so they are appended here rather
                 # than committed into tests/phpstan.neon.
                 cat > tests/phpstan-nix.neon <<EOF
@@ -452,12 +429,23 @@
                 EOF
 
                 export HOME="$TMPDIR"
+                # Unlike gutenberg-downgrade and wordpress-sqlite-anywhere,
+                # wordpress-stubs.php is fetched as a raw fetchurl file rather
+                # than the php-stubs/wordpress-stubs Composer package (see the
+                # comment on wordpressStubs above), so it never gets a "dist"
+                # entry in installed.json for PHPStan >= 2.2.13's path-package
+                # detection (phpstan-src#6356) to mistrigger on -- installed.json
+                # here has no path packages at all. The scanFiles route is what
+                # costs memory instead: with no locked package version to hang a
+                # cache key on, PHPStan >= 2.2.13 parses and reflects the whole
+                # 5.5 MB stub file to export its nodes for the result cache on
+                # every run, which alone needs a bit over 2G. 3G leaves headroom.
                 phpstan analyse \
                   -c tests/phpstan-nix.neon \
                   --no-progress \
                   --error-format=table \
                   --autoload-file=vendor/autoload.php \
-                  --memory-limit=2G
+                  --memory-limit=3G
 
                 touch "$out"
               '';
