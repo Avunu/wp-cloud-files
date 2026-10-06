@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/@avunu/docusystem/config.schema.json",
+  "name": "WP Cloud Files",
+  "tagline": "Stores and serves the WordPress media library from S3-compatible object storage, with direct browser uploads and document thumbnails.",
+  "slug": "wp-cloud-files",
+  "platform": "wordpress",
+  "repo": "https://github.com/Avunu/wp-cloud-files",
+  "domain": "wp-cloud-files.avunu.net",
+  "license": "GPL-3.0-or-later"
+}
