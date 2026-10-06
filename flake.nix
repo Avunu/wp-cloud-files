@@ -193,7 +193,7 @@
 
             meta = {
               description = composerData.description;
-              license = lib.licenses.gpl3;
+              license = lib.licenses.gpl3Plus;
               platforms = lib.platforms.all;
             };
           };
