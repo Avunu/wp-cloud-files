@@ -217,8 +217,8 @@ header version until built — the published zip is always correct.)
 
 ## Support
 
-For issues, feature requests, or questions, please contact [mail@avu.nu](mailto:mail@avu.nu) or visit [https://avunu.io/](https://avunu.io/).
+For issues, feature requests, or questions, please contact [mail@avu.nu](mailto:mail@avu.nu) or visit [https://avunu.net/](https://avunu.net/).
 
 ## License
 
-This plugin is licensed under the GPL v3 or later.
+This plugin is licensed under the GPL v3 or later (GPL-3.0-or-later). See [LICENSE](LICENSE) for the full text.

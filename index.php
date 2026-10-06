@@ -2,13 +2,15 @@
 
 /**
  * Plugin Name: WP Cloud Files
- * Plugin URI: https://avunu.io/
+ * Plugin URI: https://avunu.net/
  * Description: Use S3 for WordPress uploads. This plugin moves uploaded files to S3 and redirects request to them from there.
  * x-release-please-start-version
  * Version: 0.4.0
  * x-release-please-end
  * Author: Avunu
- * Author URI: https://avunu.io/
+ * Author URI: https://avunu.net/
+ * License: GPL-3.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-3.0.html
  * Requires PHP: 8.3
  * Requires at least: 6.6
  * Tested up to: 7.0
