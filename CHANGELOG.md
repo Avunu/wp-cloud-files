@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/Avunu/wp-cloud-files/compare/v0.5.0...v0.5.1) (2026-10-16)
+
+
+### Miscellaneous Chores
+
+* bump aws/aws-sdk-php from 3.400.1 to 3.401.0 ([#58](https://github.com/Avunu/wp-cloud-files/issues/58)) ([2c096f9](https://github.com/Avunu/wp-cloud-files/commit/2c096f9cc02c7c5f23fa173b7596697b29a96037))
+
 ## [0.5.0](https://github.com/Avunu/wp-cloud-files/compare/v0.4.0...v0.5.0) (2026-10-06)
 
 
