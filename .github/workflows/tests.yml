@@ -120,12 +120,6 @@ jobs:
       # performs ~44 full-history builtins.fetchGit clones (composition-c4 fetches
       # lock.packages ++ lock.packages-dev with allRefs=true). No binary cache
       # touches ~/.cache/nix/gitv3.
-      # One-off: an earlier run restored a fetch-cache snapshot over the runner's live
-      # database and left it malformed. It is only a cache.
-      - name: Drop the corrupted Nix fetcher cache
-        if: runner.environment != 'github-hosted'
-        run: rm -f ~/.cache/nix/fetcher-cache-v*.sqlite*
-
       - name: Cache Nix git fetches
         # The self-hosted runner keeps ~/.cache/nix between jobs; restoring a snapshot
         # over that live fetcher-cache database corrupts it.
@@ -187,12 +181,6 @@ jobs:
           purge-prefixes: nix-ci-${{ runner.os }}-
           purge-created: 604800
           purge-primary-key: never
-
-      # One-off: an earlier run restored a fetch-cache snapshot over the runner's live
-      # database and left it malformed. It is only a cache.
-      - name: Drop the corrupted Nix fetcher cache
-        if: runner.environment != 'github-hosted'
-        run: rm -f ~/.cache/nix/fetcher-cache-v*.sqlite*
 
       - name: Cache Nix git fetches
         # The self-hosted runner keeps ~/.cache/nix between jobs; restoring a snapshot
