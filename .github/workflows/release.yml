@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","nixos"]') }}
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
@@ -44,15 +44,19 @@ jobs:
   publish:
     needs: [release, tests]
     if: ${{ needs.release.outputs.release_created }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","nixos"]') }}
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
 
       - uses: DeterminateSystems/nix-installer-action@main
+        if: runner.environment == 'github-hosted'
 
       - name: Cache Nix git fetches
+        # The self-hosted runner keeps ~/.cache/nix between jobs; restoring a snapshot
+        # over that live fetcher-cache database corrupts it.
+        if: runner.environment == 'github-hosted'
         uses: actions/cache@v6
         with:
           path: |
@@ -77,7 +81,7 @@ jobs:
   notify-failure:
     needs: [release, tests, publish]
     if: ${{ always() && needs.release.outputs.release_created && (needs.tests.result == 'failure' || needs.publish.result == 'failure') }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","nixos"]') }}
     permissions:
       issues: write
     steps:

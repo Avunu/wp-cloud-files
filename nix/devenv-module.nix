@@ -65,6 +65,9 @@ in
   languages.javascript = {
     enable = true;
     npm.enable = true;
+    # The language server is an editor aid; the CI shell does not need it, and its
+    # pnpm-deps fixed-output hash in nixpkgs no longer reproduces from source.
+    lsp.enable = !forCI;
   };
 
   services.mysql = {

@@ -18,7 +18,7 @@ jobs:
   # ------------------------------------------------------------------ #
   versions:
     name: Resolve WordPress versions
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","nixos"]') }}
     outputs:
       declared: ${{ steps.wp.outputs.declared }}
       legs: ${{ steps.wp.outputs.legs }}
@@ -78,7 +78,7 @@ jobs:
   # ------------------------------------------------------------------ #
   checks:
     name: check / ${{ matrix.check }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","nixos"]') }}
     strategy:
       fail-fast: false
       matrix:
@@ -88,16 +88,24 @@ jobs:
           - phpcs
           - unit
           - thumbnails
+    env:
+      # The installer's extra-conf only reaches GitHub-hosted runners; on the self-hosted
+      # NixOS runner (a trusted Nix user) the same settings come from NIX_CONFIG.
+      NIX_CONFIG: |
+        extra-substituters = https://devenv.cachix.org
+        extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
     steps:
       - uses: actions/checkout@v7
 
       - uses: DeterminateSystems/nix-installer-action@main
+        if: runner.environment == 'github-hosted'
         with:
           extra-conf: |
             extra-substituters = https://devenv.cachix.org
             extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
 
       - name: Cache /nix/store
+        if: runner.environment == 'github-hosted'
         uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-checks-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'tests/tools/composer.lock') }}
@@ -113,6 +121,9 @@ jobs:
       # lock.packages ++ lock.packages-dev with allRefs=true). No binary cache
       # touches ~/.cache/nix/gitv3.
       - name: Cache Nix git fetches
+        # The self-hosted runner keeps ~/.cache/nix between jobs; restoring a snapshot
+        # over that live fetcher-cache database corrupts it.
+        if: runner.environment == 'github-hosted'
         uses: actions/cache@v6
         with:
           path: |
@@ -131,6 +142,7 @@ jobs:
   integration:
     name: WordPress ${{ matrix.leg.wp }} (${{ matrix.leg.role }})
     needs: versions
+    # Hosted: on the shared self-hosted runner, devenv's process supervisor intermittently shut MariaDB down mid-start.
     runs-on: ubuntu-latest
     # A continue-on-error job still reports success to downstream `needs`, so a
     # broken WordPress trunk can never block a release.
@@ -144,16 +156,23 @@ jobs:
       # The type check has its own job below, and it does not vary by WordPress
       # version; running it in every matrix leg would just repeat `npm ci`.
       WPCF_SUITES: unit thumbnails integration
+      # The installer's extra-conf only reaches GitHub-hosted runners; on the self-hosted
+      # NixOS runner (a trusted Nix user) the same settings come from NIX_CONFIG.
+      NIX_CONFIG: |
+        extra-substituters = https://devenv.cachix.org
+        extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
     steps:
       - uses: actions/checkout@v7
 
       - uses: DeterminateSystems/nix-installer-action@main
+        if: runner.environment == 'github-hosted'
         with:
           extra-conf: |
             extra-substituters = https://devenv.cachix.org
             extra-trusted-public-keys = devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=
 
       - name: Cache /nix/store
+        if: runner.environment == 'github-hosted'
         uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-ci-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**') }}
@@ -165,6 +184,9 @@ jobs:
           purge-primary-key: never
 
       - name: Cache Nix git fetches
+        # The self-hosted runner keeps ~/.cache/nix between jobs; restoring a snapshot
+        # over that live fetcher-cache database corrupts it.
+        if: runner.environment == 'github-hosted'
         uses: actions/cache@v6
         with:
           path: |
@@ -203,7 +225,7 @@ jobs:
   # ------------------------------------------------------------------ #
   types:
     name: check / typescript
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","nixos"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
