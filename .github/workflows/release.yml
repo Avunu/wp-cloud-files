@@ -54,6 +54,9 @@ jobs:
         if: runner.environment == 'github-hosted'
 
       - name: Cache Nix git fetches
+        # The self-hosted runner keeps ~/.cache/nix between jobs; restoring a snapshot
+        # over that live fetcher-cache database corrupts it.
+        if: runner.environment == 'github-hosted'
         uses: actions/cache@v6
         with:
           path: |

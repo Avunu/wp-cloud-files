@@ -121,6 +121,9 @@ jobs:
       # lock.packages ++ lock.packages-dev with allRefs=true). No binary cache
       # touches ~/.cache/nix/gitv3.
       - name: Cache Nix git fetches
+        # The self-hosted runner keeps ~/.cache/nix between jobs; restoring a snapshot
+        # over that live fetcher-cache database corrupts it.
+        if: runner.environment == 'github-hosted'
         uses: actions/cache@v6
         with:
           path: |
@@ -180,6 +183,9 @@ jobs:
           purge-primary-key: never
 
       - name: Cache Nix git fetches
+        # The self-hosted runner keeps ~/.cache/nix between jobs; restoring a snapshot
+        # over that live fetcher-cache database corrupts it.
+        if: runner.environment == 'github-hosted'
         uses: actions/cache@v6
         with:
           path: |
