@@ -142,7 +142,8 @@ jobs:
   integration:
     name: WordPress ${{ matrix.leg.wp }} (${{ matrix.leg.role }})
     needs: versions
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted","nixos"]') }}
+    # Hosted: on the shared self-hosted runner, devenv's process supervisor intermittently shut MariaDB down mid-start.
+    runs-on: ubuntu-latest
     # A continue-on-error job still reports success to downstream `needs`, so a
     # broken WordPress trunk can never block a release.
     continue-on-error: ${{ matrix.leg.role == 'nightly' }}
