@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.1](https://github.com/Avunu/wp-cloud-files/compare/v0.5.0...v0.5.1) (2026-10-20)
+
+
+### Miscellaneous Chores
+
+* bump Avunu/site-docs/.github/workflows/check-docs.yml ([f574fce](https://github.com/Avunu/wp-cloud-files/commit/f574fcee3f7ba3b7a8e19117e34e657fa5d9d123))
+* bump Avunu/site-docs/.github/workflows/check-docs.yml ([6ee8fca](https://github.com/Avunu/wp-cloud-files/commit/6ee8fcac8bed37e698aebfb271dec3c8cac76e51))
+* bump Avunu/site-docs/.github/workflows/check-docs.yml from 232c6b6116cbab524078044fa3a613d88e2cd6c3 to cb47d05d5a996a5eb0a6d2ef91c7cf8518180aa4 ([00ced63](https://github.com/Avunu/wp-cloud-files/commit/00ced635cf8555db322919d256db9524e95e703f))
+* bump Avunu/site-docs/.github/workflows/check-docs.yml from cb47d05d5a996a5eb0a6d2ef91c7cf8518180aa4 to bb0555c67bc4d933530211059b3431b16e49a55c ([abef727](https://github.com/Avunu/wp-cloud-files/commit/abef7273df2e67c63a07beb9950aae2e9a92df8c))
+* bump aws/aws-sdk-php from 3.400.1 to 3.401.0 ([#58](https://github.com/Avunu/wp-cloud-files/issues/58)) ([2c096f9](https://github.com/Avunu/wp-cloud-files/commit/2c096f9cc02c7c5f23fa173b7596697b29a96037))
+* bump aws/aws-sdk-php from 3.401.0 to 3.401.2 ([#63](https://github.com/Avunu/wp-cloud-files/issues/63)) ([86e54ed](https://github.com/Avunu/wp-cloud-files/commit/86e54ed4c858af965fe120bf504bffcc69d8e059))
+* bump the nix group with 2 updates ([#61](https://github.com/Avunu/wp-cloud-files/issues/61)) ([4bb520e](https://github.com/Avunu/wp-cloud-files/commit/4bb520e124f0e17bdca739983891712b235ed4bd))
+
 ## [0.5.0](https://github.com/Avunu/wp-cloud-files/compare/v0.4.0...v0.5.0) (2026-10-06)
 
 
