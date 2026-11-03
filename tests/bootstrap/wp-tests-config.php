@@ -8,7 +8,7 @@
  * Actions, and against plain service containers if devenv is ever swapped out.
  *
  * This file IS the S3 double: S3Client already feeds S3_ENDPOINT and
- * S3_PATH_STYLE straight to the AWS SDK, so pointing them at MinIO is all that
+ * S3_PATH_STYLE straight to the AWS SDK, so pointing them at the test server is all that
  * is needed -- no mock, no reflection, no production seam.
  */
 
@@ -72,7 +72,7 @@ define('WP_TEMP_DIR', sys_get_temp_dir());
 // unconditionally, before the S3 gate. WP_HTTP_BLOCK_EXTERNAL stops   //
 // it; note that block_request() only auto-allows the literal host     //
 // "localhost" and the site host, so 127.0.0.1 must be listed to let   //
-// the MinIO public-URL assertions through.                            //
+// the public-URL assertions through.                                  //
 // ------------------------------------------------------------------ //
 define('WP_HTTP_BLOCK_EXTERNAL', true);
 define('WP_ACCESSIBLE_HOSTS', '127.0.0.1,localhost');

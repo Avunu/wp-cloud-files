@@ -68,34 +68,12 @@
           inherit system;
           overlays = [ composition-c4.overlays.default ];
         };
-
-      # nixpkgs marks MinIO insecure (upstream abandoned it) and suggests Garage.
-      # We keep MinIO for the test S3 server anyway, and confine the exception to
-      # the development/CI shells -- packages.* and checks.* still use the strict
-      # pkgsFor above, so nothing insecure can reach a released artifact.
-      #
-      # Justification: the server binds loopback only, holds throwaway
-      # credentials, and its bucket is deliberately world-readable so the suite
-      # can prove a rewritten public URL actually resolves. Every listed CVE is an
-      # auth-bypass or DoS against data we are publishing on purpose and delete
-      # between tests.
-      #
-      # Migration path if nixpkgs drops it: devenv also ships services.garage.
-      # Garage needs website-mode plus a resolvable bucket subdomain for
-      # anonymous reads, so that assertion has to be reworked at the same time.
-      pkgsForShell =
-        system:
-        import nixpkgs {
-          inherit system;
-          overlays = [ composition-c4.overlays.default ];
-          config.allowInsecurePredicate = pkg: nixpkgs.lib.getName pkg == "minio";
-        };
     in
     {
       devShells = forAllSystems (
         system:
         let
-          pkgs = pkgsForShell system;
+          pkgs = pkgsFor system;
 
           mkEnv =
             { forCI }:
@@ -108,7 +86,7 @@
           # Interactive development: adds caddy + php-fpm on top of the CI services.
           default = mkEnv { forCI = false; };
 
-          # Same MariaDB and MinIO, no web server, and an enterTest that runs the
+          # Same MariaDB and S3 test servers, no web server, and an enterTest that runs the
           # whole suite. Driven in CI by `devenv-flake-test` -- NOT `devenv test`,
           # which re-execs `nix develop .#default` and would run the wrong shell.
           ci = mkEnv { forCI = true; };
@@ -229,7 +207,7 @@
       #   nix build .#checks.x86_64-linux.unit -L                             #
       #                                                                       #
       # The WordPress integration suite deliberately lives outside this set:  #
-      # it needs a live MariaDB and MinIO, which devenv already manages.      #
+      # it needs a live MariaDB and S3 server, which devenv already manages.  #
       # -------------------------------------------------------------------- #
       checks = forAllSystems (
         system:

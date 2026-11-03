@@ -117,7 +117,7 @@ Tests assert the render count is exactly 1 for a four-size run, rather than timi
 
 ### Signed `Content-Type` is not necessarily enforced
 
-`createPresignedPutUrl()` signs the Content-Type, but enforcement is the provider's choice. MinIO accepts a PUT whose Content-Type differs from the signed one and returns 200 (verified in `S3ClientTest`). The extension allowlist in `RestController::presign()` therefore constrains the *key*, not the bytes or the type the browser actually sends — which compounds finding 8.
+`createPresignedPutUrl()` signs the Content-Type, but enforcement is the provider's choice. MinIO (the suite's original test server) accepted a PUT whose Content-Type differed from the signed one and returned 200; `S3ClientTest` now accepts either 200 or 403 because that is the provider's choice. The extension allowlist in `RestController::presign()` therefore constrains the *key*, not the bytes or the type the browser actually sends — which compounds finding 8.
 
 * * *
 

@@ -6,7 +6,7 @@
  * test leaks into the next.
  *
  * This is test-side state management, not a production seam: the S3 double
- * itself is just the S3_ENDPOINT / S3_PATH_STYLE constants pointing at MinIO,
+ * itself is just the S3_ENDPOINT / S3_PATH_STYLE constants pointing at the test S3 server,
  * which S3Client already feeds straight to the AWS SDK.
  */
 

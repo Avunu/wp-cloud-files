@@ -8,7 +8,7 @@ use WP_UnitTestCase;
 
 /**
  * Base class for suites that run against a real WordPress install, a real
- * MariaDB and a real MinIO.
+ * MariaDB and a real S3 server.
  */
 abstract class WPTestCase extends WP_UnitTestCase
 {

@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!--
-    Pure unit suites. No database, no MinIO, no WordPress: Brain Monkey defines
+    Pure unit suites. No database, no S3 server, no WordPress: Brain Monkey defines
     the WordPress functions, so this config must NOT share a bootstrap with the
     integration suite.
 

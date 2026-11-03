@@ -5,7 +5,7 @@
 #   WP_VERSION=7.0 tests/bin/run-integration.sh
 #   WP_VERSION=trunk tests/bin/run-integration.sh
 #
-# Expects MariaDB and MinIO to already be running (devenv up, or enterTest).
+# Expects MariaDB and the S3 servers to already be running (devenv up, or enterTest).
 # Core and the PHPUnit suite both come from one wordpress-develop tarball:
 # src/ is core, tests/phpunit is the suite. No svn, no `npm run build`.
 

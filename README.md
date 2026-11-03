@@ -42,7 +42,7 @@ through the normal WordPress Plugins screen.
 4. Activate the plugin through the WordPress admin interface
 
 With Nix, `direnv allow` (or `nix develop --impure`) gives you PHP 8.3 with the
-right extensions, Composer, Node, MariaDB and MinIO. `setup` prepares a local
+right extensions, Composer, Node, MariaDB and an rclone-backed S3 test server. `setup` prepares a local
 WordPress; `devenv up` starts the services.
 
 ### Tests
