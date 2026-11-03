@@ -35,6 +35,14 @@ class S3Client
                 'version' => 'latest',
                 'endpoint' => S3_ENDPOINT,
                 'use_path_style_endpoint' => defined('S3_PATH_STYLE') ? S3_PATH_STYLE : true,
+                // The SDK default (when_supported) validates the CRC of any
+                // response that carries an x-amz-checksum-* header, even one it
+                // never asked for. downloadFile() reads a non-seekable stream,
+                // and the validator rewinds the body, so a provider that echoes
+                // the checksum from the upload (rclone does) turned every
+                // download into "Cannot seek a response body". AWS S3 only
+                // returns checksums on request, so this changes nothing there.
+                'response_checksum_validation' => 'when_required',
             ]);
         }
 
