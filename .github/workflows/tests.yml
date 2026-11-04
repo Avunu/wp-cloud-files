@@ -137,7 +137,7 @@ jobs:
       - run: nix build -L --no-link ".#checks.x86_64-linux.${{ matrix.check }}"
 
   # ------------------------------------------------------------------ #
-  # WordPress integration: real MariaDB + real MinIO, both from devenv. #
+  # WordPress integration: MariaDB + rclone S3, both from devenv.      #
   # ------------------------------------------------------------------ #
   integration:
     name: WordPress ${{ matrix.leg.wp }} (${{ matrix.leg.role }})

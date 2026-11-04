@@ -11,7 +11,7 @@ use Throwable;
  * Empties the test bucket between cases.
  *
  * WP_UnitTestCase wraps each test in a database transaction and rolls it back,
- * but MinIO has no such thing and its data directory survives across runs. The
+ * but an object store has no such thing and its data directory survives across runs. The
  * bucket is therefore emptied in set_up() as well as tear_down(), so a crashed
  * or killed run cannot poison the next one.
  */

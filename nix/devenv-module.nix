@@ -1,9 +1,9 @@
 # Shared devenv environment, parameterised by whether it is running in CI.
 #
 # CI drops the web server (nothing serves HTTP there, and caddy's root points at
-# a composer-installed path that CI never populates) but keeps MariaDB and MinIO,
-# so the integration suite runs against exactly the same services locally and in
-# GitHub Actions.
+# a composer-installed path that CI never populates) but keeps MariaDB and the
+# rclone-backed S3 test server, so the integration suite runs against exactly the
+# same services locally and in GitHub Actions.
 { forCI ? false }:
 
 {
@@ -15,7 +15,14 @@
 
 let
   testBucket = "wp-cloud-files-test";
-  minioPort = config.processes.minio.ports.api.value;
+
+  # Throwaway credentials for a loopback-only test server.
+  s3Key = "wpcftestkey";
+  s3Secret = "wpcftestsecret";
+  s3Region = "us-east-1";
+
+  s3Port = config.processes.s3.ports.api.value;
+  s3PublicPort = config.processes.s3-public.ports.http.value;
 in
 {
   packages = with pkgs; [
@@ -90,36 +97,69 @@ in
   # actually runs and the databases get created after mariadbd is really up.
   processes.mysql.ready.timeout = 60;
 
-  services.minio = {
-    enable = true;
-    accessKey = "wpcftestkey";
-    secretKey = "wpcftestsecret";
-    region = "us-east-1";
-    browser = false;
-
-    # Deliberately not services.minio.buckets: that is implemented as
-    # `mkdir -p $MINIO_DATA_DIR/$bucket`, which is unreliable on MinIO's
-    # single-drive erasure backend. afterStart runs once `mc admin info local`
-    # succeeds, so the server is already up here.
-    afterStart = ''
-      mc mb --ignore-existing local/${testBucket}
-      # UrlRewriterEndToEndTest fetches the public URL over plain HTTP to prove
-      # the rewritten URL actually resolves, which needs anonymous read.
-      mc anonymous set download local/${testBucket}
+  # The S3 test server is rclone, not MinIO: upstream abandoned MinIO and nixpkgs
+  # has removed it (and marked its client insecure first). Two processes share one
+  # data directory, because rclone cannot do both jobs in a single listener:
+  #
+  #   s3         `rclone serve s3` WITH --auth-key, so SigV4 is genuinely verified
+  #              (the presigned-upload tests mean nothing against a server that
+  #              accepts any signature). With auth on it refuses anonymous reads.
+  #   s3-public  `rclone serve http`, read-only, over the same directory. This is
+  #              the anonymous public URL UrlRewriterEndToEndTest fetches. The
+  #              plugin already treats S3_PUBLIC_URL as separate from S3_ENDPOINT
+  #              (in production it is a CDN), so nothing about the tests changes.
+  #              --dir-cache-time 0 is load-bearing: objects are written by the
+  #              *other* rclone process, so the default 5 minute directory cache
+  #              would 404 every object uploaded after the first listing.
+  #
+  # `rclone serve s3` exposes top-level directories as buckets, so the bucket is a
+  # plain mkdir before the server starts. There is no client, no provisioning step
+  # and no readiness race.
+  processes.s3 = {
+    ports.api.allocate = 9000;
+    exec = ''
+      mkdir -p "$DEVENV_STATE/s3/data/${testBucket}"
+      exec ${pkgs.rclone}/bin/rclone serve s3 "$DEVENV_STATE/s3/data" \
+        --addr 127.0.0.1:${toString s3Port} \
+        --auth-key ${s3Key},${s3Secret} \
+        --no-cleanup
     '';
+    # A signed listing of the bucket proves the listener is up, auth works and the
+    # bucket exists. (An unsigned GET is answered 400, so a plain http probe would
+    # mis-report.) Setting `timeout` keeps devenv supervising the probe -- see the
+    # note on processes.mysql.ready.timeout above.
+    ready = {
+      exec = lib.concatStringsSep " " [
+        "${pkgs.curl}/bin/curl -sf -o /dev/null"
+        "--aws-sigv4 aws:amz:${s3Region}:s3"
+        "--user ${s3Key}:${s3Secret}"
+        "http://127.0.0.1:${toString s3Port}/${testBucket}"
+      ];
+      initial_delay = 1;
+      period = 1;
+      timeout = 120;
+    };
   };
 
-  # The minio module ships no readiness probe, so wait_for_processes would skip
-  # it and the suite could start before the bucket exists.
-  processes.minio.ready = {
-    http.get = {
-      host = "127.0.0.1";
-      port = minioPort;
-      path = "/minio/health/live";
+  processes.s3-public = {
+    ports.http.allocate = 9010;
+    exec = ''
+      mkdir -p "$DEVENV_STATE/s3/data/${testBucket}"
+      exec ${pkgs.rclone}/bin/rclone serve http "$DEVENV_STATE/s3/data" \
+        --addr 127.0.0.1:${toString s3PublicPort} \
+        --read-only \
+        --dir-cache-time 0
+    '';
+    ready = {
+      http.get = {
+        host = "127.0.0.1";
+        port = s3PublicPort;
+        path = "/${testBucket}/";
+      };
+      initial_delay = 1;
+      period = 1;
+      timeout = 120;
     };
-    initial_delay = 1;
-    period = 1;
-    timeout = 120;
   };
 
   services.caddy = lib.mkIf (!forCI) {
@@ -145,11 +185,11 @@ in
     WP_TESTS_DB_HOST = "localhost";
 
     WPCF_TEST_BUCKET = testBucket;
-    S3_TEST_ENDPOINT = "http://127.0.0.1:${toString minioPort}";
-    S3_TEST_PUBLIC_URL = "http://127.0.0.1:${toString minioPort}/${testBucket}";
-    S3_TEST_KEY = config.services.minio.accessKey;
-    S3_TEST_SECRET = config.services.minio.secretKey;
-    S3_TEST_REGION = config.services.minio.region;
+    S3_TEST_ENDPOINT = "http://127.0.0.1:${toString s3Port}";
+    S3_TEST_PUBLIC_URL = "http://127.0.0.1:${toString s3PublicPort}/${testBucket}";
+    S3_TEST_KEY = s3Key;
+    S3_TEST_SECRET = s3Secret;
+    S3_TEST_REGION = s3Region;
   };
 
   scripts = {
@@ -258,7 +298,7 @@ in
     # devenv rebuild. WPCF_SUITES narrows it when iterating.
     #
     # Deliberately not `exec`: that would replace this shell and discard the EXIT
-    # trap above, leaving process-compose (and MariaDB and MinIO) running after
+    # trap above, leaving process-compose (and MariaDB and the S3 servers) running after
     # the suite finishes.
     testStatus=0
     ./tests/bin/run-all.sh || testStatus=$?

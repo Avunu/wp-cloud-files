@@ -101,8 +101,9 @@ final class S3ClientTest extends WPTestCase
 
     /**
      * createPresignedPutUrl() signs the Content-Type, but enforcement is up to
-     * the provider and cannot be relied on: MinIO accepts a PUT whose
-     * Content-Type differs from the signed one (verified here -- it returns 200).
+     * the provider and cannot be relied on: MinIO, which this suite originally
+     * ran against, accepted a PUT whose Content-Type differed from the signed
+     * one (it returned 200).
      *
      * This is documented rather than asserted as a rejection, because the plugin
      * cannot control it. It matters for the presign flow's threat model: the

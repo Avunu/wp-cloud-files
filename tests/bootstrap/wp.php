@@ -59,9 +59,10 @@ tests_add_filter('muplugins_loaded', static function (): void {
 });
 
 /*
- * Fail loudly on any outbound HTTP other than our own MinIO. WP_HTTP_BLOCK_EXTERNAL
- * already blocks it, but a blocked request returns a WP_Error that plugin code
- * may swallow -- this records the attempt so the test itself fails.
+ * Fail loudly on any outbound HTTP other than our own S3 test servers.
+ * WP_HTTP_BLOCK_EXTERNAL already blocks it, but a blocked request returns a
+ * WP_Error that plugin code may swallow -- this records the attempt so the
+ * test itself fails.
  */
 tests_add_filter(
     'pre_http_request',

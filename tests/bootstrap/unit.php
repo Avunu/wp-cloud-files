@@ -18,7 +18,7 @@ use Avunu\WPCloudFiles\Tests\Support\Profile;
 /*
  * Fixed, deterministic values so unit tests can assert exact URLs. The
  * integration bootstrap reads the equivalents from the environment instead,
- * because there they must point at a live MinIO.
+ * because there they must point at a live S3 server.
  */
 define('S3_KEY', 'unit-test-key');
 define('S3_SECRET', 'unit-test-secret');

@@ -3,7 +3,7 @@
 # Everything the CI shell's enterTest runs, in one place.
 #
 # Kept as a repo file rather than inline Nix so it can be edited without a
-# devenv rebuild. Expects MariaDB and MinIO to already be up.
+# devenv rebuild. Expects MariaDB and the S3 servers to already be up.
 #
 #   WPCF_SUITES="unit integration" tests/bin/run-all.sh
 
