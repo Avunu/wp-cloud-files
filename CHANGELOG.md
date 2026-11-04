@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.2](https://github.com/Avunu/wp-cloud-files/compare/v0.5.1...v0.5.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* skip unrequested response checksum validation on S3 downloads ([bc5e04b](https://github.com/Avunu/wp-cloud-files/commit/bc5e04b1e93bde2c6ddd815aff9bb1641123e378))
+
+
+### Miscellaneous Chores
+
+* bump the nix group with 2 updates ([#84](https://github.com/Avunu/wp-cloud-files/issues/84)) ([9b63532](https://github.com/Avunu/wp-cloud-files/commit/9b635322bfe22173d307c509da010a85769d900d))
+
 ## [0.5.1](https://github.com/Avunu/wp-cloud-files/compare/v0.5.0...v0.5.1) (2026-10-20)
 
 
