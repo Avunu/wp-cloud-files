@@ -12,7 +12,7 @@
         "phpoffice/phppresentation": "^1.2",
         "dompdf/dompdf": "^3.1",
         "mpdf/mpdf": "^8.2",
-        "yahnis-elsts/plugin-update-checker": "^5.6"
+        "yahnis-elsts/plugin-update-checker": "^5.6 || ^6.0"
     },
     "license": "GPL-3.0-or-later",
     "authors": [
