@@ -65,6 +65,14 @@ class Plugin
         $mediaHandler = new MediaHandler();
         $thumbnailHandler = new ThumbnailHandler();
 
+        // Executables never reach uploads/, let alone the public bucket.
+        add_filter('wp_handle_upload_prefilter', [ExecutableGuard::class, 'filterUpload']);
+        add_filter('wp_handle_sideload_prefilter', [ExecutableGuard::class, 'filterUpload']);
+
+        // A local file name is only unique among local files; once a library is
+        // offloaded most of them are gone, so also check the bucket.
+        add_filter('wp_unique_filename', [$mediaHandler, 'uniqueFilename'], 10, 4);
+
         // Process complete media after WordPress is done with it
         add_filter('wp_update_attachment_metadata', [$mediaHandler, 'processMedia'], 999, 2);
 

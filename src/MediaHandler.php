@@ -145,6 +145,61 @@ class MediaHandler
     }
 
     /**
+     * `wp_unique_filename`: also avoid names that are already taken in the
+     * bucket.
+     *
+     * WordPress only checks the local directory, and in an offloaded library
+     * that directory is mostly empty, so a second "photo.jpg" in the same month
+     * would be uploaded over the first attachment's object. Skipped for excluded
+     * paths (they never reach the bucket) and when a custom callback is naming
+     * the file.
+     *
+     * @param string        $filename Unique file name WordPress chose.
+     * @param string        $ext      Extension, with the leading dot.
+     * @param string        $dir      Absolute directory the file goes in.
+     * @param callable|null $callback Custom naming callback, if any.
+     */
+    public function uniqueFilename($filename, $ext = '', $dir = '', $callback = null): string
+    {
+        $filename = (string) $filename;
+        if ($filename === '' || $callback !== null || !is_string($dir) || $dir === '') {
+            return $filename;
+        }
+
+        $uploads = wp_upload_dir(null, false);
+        $basedir = trailingslashit((string) $uploads['basedir']);
+        $dir = trailingslashit($dir);
+
+        if (!str_starts_with($dir, $basedir)) {
+            return $filename;
+        }
+
+        $subdir = substr($dir, strlen($basedir));
+        if (!Exclusions::shouldOffload($subdir . $filename)) {
+            return $filename;
+        }
+
+        $s3Client = S3Client::getInstance();
+        if (!$s3Client->fileExists($subdir . $filename)) {
+            return $filename;
+        }
+
+        $extension = pathinfo($filename, PATHINFO_EXTENSION);
+        $suffix = $extension !== '' ? '.' . $extension : '';
+        $name = $extension !== '' ? substr($filename, 0, -strlen($suffix)) : $filename;
+
+        // Bounded like RestController::uniqueKey(): every probe is a request.
+        for ($number = 1; $number <= 100; $number++) {
+            $candidate = "{$name}-{$number}{$suffix}";
+            if (!file_exists($dir . $candidate) && !$s3Client->fileExists($subdir . $candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $name . '-' . bin2hex(random_bytes(4)) . $suffix;
+    }
+
+    /**
      * Upload a file to S3 and delete the local copy
      *
      * @param string $localPath Full local path to the file

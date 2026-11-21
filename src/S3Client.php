@@ -164,9 +164,32 @@ class S3Client
         return $baseUrl . '/' . ltrim($path, '/');
     }
 
-    public function uploadFile(string $localPath, string $s3Path): bool
+    /**
+     * Copy a local file to the bucket.
+     *
+     * Refuses executable files whatever their declared type (see
+     * ExecutableGuard), and, unless $overwrite is true, a key that already
+     * holds an object: in an offloaded library the local uploads directory is
+     * mostly empty, so a "unique" local file name can still collide with
+     * another attachment's object.
+     */
+    public function uploadFile(string $localPath, string $s3Path, bool $overwrite = true): bool
     {
         if (!file_exists($localPath) || !is_readable($localPath)) {
+            return false;
+        }
+
+        if (ExecutableGuard::isExecutable($s3Path, null, $localPath)) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("S3 Upload: refusing executable file {$s3Path}");
+            }
+            return false;
+        }
+
+        if (!$overwrite && $this->fileExists($s3Path)) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("S3 Upload: {$s3Path} already exists; not overwriting");
+            }
             return false;
         }
 
@@ -183,6 +206,19 @@ class S3Client
             if (defined('WP_DEBUG') && WP_DEBUG) {
                 error_log("S3 Upload error: {$e->getMessage()}");
             }
+            return false;
+        }
+    }
+
+    /**
+     * Whether an object exists. False when the bucket cannot be reached; an
+     * upload attempted after that fails on its own.
+     */
+    public function fileExists(string $s3Path): bool
+    {
+        try {
+            return $this->getFilesystem()->fileExists($s3Path);
+        } catch (\Throwable $e) {
             return false;
         }
     }

@@ -2,6 +2,9 @@
 
 namespace Avunu\WPCloudFiles\DirectUpload;
 
+use Avunu\WPCloudFiles\Config;
+use Avunu\WPCloudFiles\Exclusions;
+use Avunu\WPCloudFiles\ExecutableGuard;
 use Avunu\WPCloudFiles\S3Client;
 use WP_Error;
 use WP_REST_Request;
@@ -76,14 +79,29 @@ class RestController
         }
         $type = $filetype['type'];
 
+        // Independent of upload_mimes: a site that allows .php uploads must
+        // still never get a presigned PUT for one.
+        if (ExecutableGuard::isExecutable($filename, $type)) {
+            return new WP_Error('wpcf_executable', 'Executable files cannot be uploaded.', ['status' => 403]);
+        }
+
         $dir = wp_upload_dir();
         if (!empty($dir['error'])) {
             return new WP_Error('wpcf_uploaddir', $dir['error'], ['status' => 500]);
         }
 
+        // An excluded (private) destination must not land in the bucket.
+        // direct-upload.js already leaves purpose-specific uploaders (such as
+        // WooCommerce downloads) on the normal path; this is the backstop for
+        // a `wpcf_should_offload` filter that excludes ordinary uploads.
+        $subdir = ltrim((string) $dir['subdir'], '/');
+        if (!Exclusions::shouldOffload(($subdir !== '' ? $subdir . '/' : '') . $filename)) {
+            return new WP_Error('wpcf_excluded', 'This upload is stored locally.', ['status' => 409]);
+        }
+
         $key = $this->uniqueKey($dir, $filename);
 
-        $expires = (defined('S3_PRESIGN_EXPIRES') && S3_PRESIGN_EXPIRES) ? S3_PRESIGN_EXPIRES : '+15 minutes';
+        $expires = Config::string('S3_PRESIGN_EXPIRES', '+15 minutes');
 
         $uploadUrl = S3Client::getInstance()->createPresignedPutUrl($key, $type, $expires);
 
@@ -170,6 +188,10 @@ class RestController
             return new WP_Error('wpcf_disallowed_type', 'This file type is not allowed.', ['status' => 403]);
         }
         $type = $filetype['type'];
+
+        if (ExecutableGuard::isExecutable($key, $type)) {
+            return new WP_Error('wpcf_executable', 'Executable files cannot be uploaded.', ['status' => 403]);
+        }
 
         // Same check core's attachment controller makes: being able to upload
         // does not imply being able to attach media to someone else's post.
