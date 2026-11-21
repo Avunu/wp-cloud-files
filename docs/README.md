@@ -143,7 +143,9 @@ The default list covers WooCommerce downloadable products
 (`woocommerce_uploads/`), Fluent Forms and Gravity Forms entries, WooCommerce PDF
 Invoices (`wpo_wcpdf`, which matches its `wpo_wcpdf_<hash>/` directory) and
 WooCommerce logs. Setting `S3_EXCLUDE_PREFIXES` replaces the default list; end a
-prefix with `/` to match one directory exactly. Set it to `,` to exclude nothing.
+prefix with `/` to match one directory exactly. To exclude nothing, define the
+constant as `''`, or set the environment variable to `,` (an empty environment
+variable counts as unset and keeps the default list).
 
 For decisions a prefix cannot express, use the filter:
 

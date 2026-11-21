@@ -86,6 +86,27 @@ final class ExclusionsTest extends UnitTestCase
         $this->assertFalse(Exclusions::isExcluded('woocommerce_uploads/a.zip'));
     }
 
+    public function testAnEmptyEnvironmentVariableKeepsTheDefaultList(): void
+    {
+        putenv('S3_EXCLUDE_PREFIXES=');
+
+        $this->assertContains('woocommerce_uploads/', Exclusions::prefixes());
+    }
+
+    /**
+     * A constant cannot be undefined again, so this runs in its own process.
+     *
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testAnEmptyConstantExcludesNothing(): void
+    {
+        define('S3_EXCLUDE_PREFIXES', '');
+
+        $this->assertSame([], Exclusions::prefixes());
+        $this->assertFalse(Exclusions::isExcluded('woocommerce_uploads/a.zip'));
+    }
+
     public function testTheFilterHasTheLastWord(): void
     {
         Filters\expectApplied('wpcf_should_offload')

@@ -25,13 +25,20 @@ final class Exclusions
      * The configured prefixes, S3_EXCLUDE_PREFIXES or the default list.
      *
      * Set S3_EXCLUDE_PREFIXES to a comma-separated list to replace the default.
-     * An explicit empty list is not possible through the environment (empty
-     * means unset); use the `wpcf_should_offload` filter to offload everything.
+     * A constant is taken as written, so define('S3_EXCLUDE_PREFIXES', '')
+     * excludes nothing. An empty environment variable means unset and keeps
+     * the default; set it to "," to exclude nothing from the environment.
      *
      * @return list<string>
      */
     public static function prefixes(): array
     {
+        if (Config::source('S3_EXCLUDE_PREFIXES') === 'constant') {
+            $value = Config::get('S3_EXCLUDE_PREFIXES');
+
+            return self::parse(is_scalar($value) ? (string) $value : '');
+        }
+
         return self::parse(Config::string('S3_EXCLUDE_PREFIXES', self::DEFAULT_PREFIXES));
     }
 
