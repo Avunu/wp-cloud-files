@@ -41,11 +41,11 @@ if (!class_exists(\Aws\S3\S3Client::class)) {
 }
 
 // Self-update from GitHub releases, for installs of the release zip only. A
-// Composer-managed install is updated by Composer, and a site that sets
-// DISALLOW_FILE_MODS cannot install updates at all, so neither loads the
-// update checker. Registered before the S3 gate so updates work even when the
+// Composer-managed install is updated by Composer, and a site where file
+// modifications are off (DISALLOW_FILE_MODS) cannot install updates at all,
+// so neither loads the update checker. Registered before the S3 gate so updates work even when the
 // plugin isn't configured yet.
-if (file_exists($wpcfOwnVendor) && !(defined('DISALLOW_FILE_MODS') && DISALLOW_FILE_MODS)) {
+if (file_exists($wpcfOwnVendor) && wp_is_file_mod_allowed('wp_cloud_files_update_checker')) {
     require_once __DIR__ . '/vendor/yahnis-elsts/plugin-update-checker/plugin-update-checker.php';
 
     $wpcfUpdateChecker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
