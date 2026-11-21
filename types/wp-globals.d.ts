@@ -38,6 +38,8 @@ interface WpcfPluploadUploader {
 	): void;
 	trigger(name: string, ...args: unknown[]): void;
 	removeFile(file: WpcfPluploadFile): void;
+	/** Plupload options; `multipart_params` are POSTed with each file. */
+	settings?: { multipart_params?: Record<string, unknown> };
 }
 
 /** Minimal Backbone model surface used for the upload-queue placeholders. */

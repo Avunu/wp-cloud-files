@@ -17,9 +17,13 @@ class UrlRewriter
         // relative path starts right after it, with no off-by-one correction.
         $baseurl = trailingslashit($uploads['baseurl']);
 
-        // Only rewrite URLs that point to uploads directory
+        // Only rewrite URLs that point to uploads directory, and never for a
+        // private file that was not offloaded (S3_EXCLUDE_PREFIXES).
         if (str_starts_with($url, $baseurl)) {
             $relativePath = substr($url, strlen($baseurl));
+            if (!Exclusions::shouldOffload($relativePath, $attachmentId)) {
+                return $url;
+            }
             return S3Client::getInstance()->getPublicUrl($relativePath);
         }
 
@@ -46,6 +50,9 @@ class UrlRewriter
             }
 
             $relativePath = substr($source['url'], strlen($baseurl));
+            if (!Exclusions::shouldOffload($relativePath, $attachmentId)) {
+                continue;
+            }
             $sources[$width]['url'] = S3Client::getInstance()->getPublicUrl($relativePath);
         }
 

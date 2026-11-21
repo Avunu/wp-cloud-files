@@ -17,6 +17,13 @@ class MediaHandler
             return $metadata;
         }
 
+        // Private files (S3_EXCLUDE_PREFIXES, `wpcf_should_offload`) are
+        // neither uploaded nor removed locally.
+        $relativePath = $this->getOriginalFilePath($metadata, $attachmentId);
+        if ($relativePath !== '' && !Exclusions::shouldOffload($relativePath, $attachmentId)) {
+            return $metadata;
+        }
+
         // Check if metadata is complete
         if (!$this->isMetadataComplete($metadata, $attachmentId)) {
             return $metadata;
@@ -33,8 +40,8 @@ class MediaHandler
             $uploads = wp_upload_dir();
             $basedir = trailingslashit($uploads['basedir']);
 
-            // Get the file path - either from metadata or directly from attachment
-            $mainFilePath = $this->getOriginalFilePath($metadata, $attachmentId);
+            // The file path, from metadata or directly from the attachment.
+            $mainFilePath = $relativePath;
 
             if (empty($mainFilePath)) {
                 if (defined('WP_DEBUG') && WP_DEBUG) {

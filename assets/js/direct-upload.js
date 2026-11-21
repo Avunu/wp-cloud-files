@@ -71,6 +71,17 @@
 	function claimFiles( self, up, files ) {
 		var claimed = [];
 
+		// A purpose-specific uploader (WooCommerce's downloadable-product frame
+		// sets `type: 'downloadable_product'`) relies on server-side hooks that
+		// only run for a normal async-upload.php POST: WooCommerce redirects
+		// those files into the private woocommerce_uploads/ directory. A direct
+		// upload would bypass that and publish the file, so leave such batches
+		// alone.
+		var params = ( up.settings && up.settings.multipart_params ) || {};
+		if ( params.type ) {
+			return;
+		}
+
 		for ( var i = files.length - 1; i >= 0; i-- ) {
 			var file = files[ i ];
 
