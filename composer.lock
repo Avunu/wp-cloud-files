@@ -1928,16 +1928,16 @@
         },
         {
             "name": "phpoffice/phpspreadsheet",
-            "version": "3.10.7",
+            "version": "3.10.9",
             "source": {
                 "type": "git",
                 "url": "https://github.com/PHPOffice/PhpSpreadsheet.git",
-                "reference": "450a28a2c050d8f983e663c0bc8918e0cdae5708"
+                "reference": "f362cd42b50120f94dd90f9d25ff0ae5e169e9e8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/PHPOffice/PhpSpreadsheet/zipball/450a28a2c050d8f983e663c0bc8918e0cdae5708",
-                "reference": "450a28a2c050d8f983e663c0bc8918e0cdae5708",
+                "url": "https://api.github.com/repos/PHPOffice/PhpSpreadsheet/zipball/f362cd42b50120f94dd90f9d25ff0ae5e169e9e8",
+                "reference": "f362cd42b50120f94dd90f9d25ff0ae5e169e9e8",
                 "shasum": ""
             },
             "require": {
@@ -2028,9 +2028,10 @@
             ],
             "support": {
                 "issues": "https://github.com/PHPOffice/PhpSpreadsheet/issues",
-                "source": "https://github.com/PHPOffice/PhpSpreadsheet/tree/3.10.7"
+                "source": "https://github.com/PHPOffice/PhpSpreadsheet/tree/3.10.9"
             },
-            "time": "2026-07-12T19:47:52+00:00"
+            "time": "2026-11-08T04:45:59+00:00",
+            "published-time": "2026-11-08T04:52:03+00:00"
         },
         {
             "name": "phpoffice/phpword",
