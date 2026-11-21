@@ -48,7 +48,7 @@ if (!class_exists(\Aws\S3\S3Client::class)) {
 if (file_exists($wpcfOwnVendor) && wp_is_file_mod_allowed('wp_cloud_files_update_checker')) {
     require_once __DIR__ . '/vendor/yahnis-elsts/plugin-update-checker/plugin-update-checker.php';
 
-    $wpcfUpdateChecker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+    $wpcfUpdateChecker = \YahnisElsts\PluginUpdateChecker\v6\PucFactory::buildUpdateChecker(
         'https://github.com/Avunu/wp-cloud-files/',
         __FILE__,
         'wp-cloud-files'
@@ -57,7 +57,7 @@ if (file_exists($wpcfOwnVendor) && wp_is_file_mod_allowed('wp_cloud_files_update
     // lacks vendor/). getVcsApi() is typed as the base Api, and
     // enableReleaseAssets() only exists on the GitHub/GitLab implementations.
     // Checking for the method rather than a versioned class name
-    // (v5p7\Vcs\GitHubApi) keeps this working across update-checker releases.
+    // (v6p0\Vcs\GitHubApi) keeps this working across update-checker releases.
     $wpcfVcsApi = $wpcfUpdateChecker->getVcsApi();
     if (method_exists($wpcfVcsApi, 'enableReleaseAssets')) {
         $wpcfVcsApi->enableReleaseAssets('/wp-cloud-files\.zip$/');

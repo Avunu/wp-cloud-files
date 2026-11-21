@@ -36,7 +36,7 @@
       # Read a plugin header field out of index.php. That file is the single
       # source of truth for WordPress compatibility because plugin-update-checker
       # fetches index.php *from the git tag* and its headers override everything
-      # else (Puc/v5p7/Vcs/PluginUpdateChecker.php:78-85). Duplicating the value
+      # else (Puc/v6p0/Vcs/PluginUpdateChecker.php:78-85). Duplicating the value
       # into composer.json would create a second copy that PUC never reads.
       pluginHeader =
         field:
@@ -52,7 +52,7 @@
 
       # plugin-update-checker's fixSupportedWordpressVersion() silently discards
       # anything that is not bare major.minor, and WordPress then reports
-      # "Compatibility: Unknown" (Puc/v5p7/UpdateChecker.php:463).
+      # "Compatibility: Unknown" (Puc/v6p0/UpdateChecker.php:463).
       requireMajorMinor =
         field: value:
         if builtins.match "[0-9]+\\.[0-9]+" value == null then
