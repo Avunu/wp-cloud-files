@@ -348,4 +348,50 @@ final class RestDirectUploadTest extends WPTestCase
 
         $this->assertSame("{$base}-6.jpg", $key, 'the search should walk to the first free suffix');
     }
+
+    // ---------------------------------------------------------------- //
+    // Browser upload and the bucket's CORS rule                        //
+    // ---------------------------------------------------------------- //
+
+    /**
+     * The browser's PUT is cross-origin: it carries an Origin header, and the
+     * bucket's CORS rule (set up by the site's provisioning, e.g. PUT/GET from
+     * https://<domain>) decides whether the browser may send it. What the
+     * plugin controls is the signature: it may only sign headers the browser
+     * really sends, or a correct CORS rule still ends in 403.
+     */
+    public function testThePresignedPutWorksFromABrowserOrigin(): void
+    {
+        $presign = $this->presign();
+
+        parse_str((string) parse_url($presign['uploadUrl'], PHP_URL_QUERY), $query);
+        $signed = explode(';', (string) ($query['X-Amz-SignedHeaders'] ?? ''));
+        $this->assertContains('host', $signed);
+        $this->assertSame([], array_diff($signed, ['host', 'content-type']), 'only headers a browser PUT sends may be signed');
+
+        $put = wp_remote_request($presign['uploadUrl'], [
+            'method'  => 'PUT',
+            'body'    => (string) file_get_contents(\Avunu\WPCloudFiles\Tests\Support\FixturePath::to('small.jpg')),
+            'headers' => [
+                'Content-Type' => $presign['type'],
+                'Origin'       => home_url(),
+                'Referer'      => admin_url('upload.php'),
+            ],
+        ]);
+
+        $this->assertNotWPError($put);
+        $this->assertSame(200, wp_remote_retrieve_response_code($put), 'a PUT with browser headers must match the signature');
+        $this->assertTrue($this->objectExists($presign['key']));
+    }
+
+    public function testAPresignForAnExcludedDestinationIsRefused(): void
+    {
+        add_filter('wpcf_should_offload', '__return_false');
+
+        $response = $this->post('/presign', ['filename' => 'photo.jpg']);
+
+        $this->assertSame(409, $response->get_status());
+        $this->assertSame('wpcf_excluded', $response->get_data()['code']);
+        $this->assertSame([], $this->listObjects());
+    }
 }

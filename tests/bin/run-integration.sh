@@ -48,11 +48,23 @@ fi
 
 # ------------------------------------------------------------------ #
 # Writable content dir, with the plugin symlinked in under its real   #
-# directory name (DocumentThumbnailer resolves DomPDF through it).    #
+# directory name.                                                     #
 # ------------------------------------------------------------------ #
-export WPCF_CONTENT_DIR="$STATE/wp-test/wp-content"
-mkdir -p "$WPCF_CONTENT_DIR/plugins" "$WPCF_CONTENT_DIR/uploads"
-ln -sfn "$ROOT" "$WPCF_CONTENT_DIR/plugins/wp-cloud-files"
+classic_content_dir="$STATE/wp-test/wp-content"
+mkdir -p "$classic_content_dir/plugins" "$classic_content_dir/uploads"
+ln -sfn "$ROOT" "$classic_content_dir/plugins/wp-cloud-files"
+
+# ------------------------------------------------------------------ #
+# The Bedrock fixture: content dir "app", and the plugin as Composer  #
+# installs it -- its own files, no vendor/ of its own -- while the     #
+# project autoloader (here, the repo's vendor/) supplies every        #
+# dependency. Rebuilt on every run so it never goes stale.            #
+# ------------------------------------------------------------------ #
+bedrock_content_dir="$STATE/wp-test-bedrock/app"
+bedrock_plugin_dir="$bedrock_content_dir/plugins/wp-cloud-files"
+rm -rf "$bedrock_plugin_dir"
+mkdir -p "$bedrock_plugin_dir" "$bedrock_content_dir/uploads"
+cp -r "$ROOT/index.php" "$ROOT/composer.json" "$ROOT/src" "$ROOT/assets" "$bedrock_plugin_dir/"
 
 export TMPDIR="$STATE/test-tmp"
 mkdir -p "$TMPDIR"
@@ -63,7 +75,7 @@ export WP_TESTS_CONFIG_FILE_PATH="$ROOT/tests/bootstrap/wp-tests-config.php"
 # Run once per configuration profile: the plugin reads its settings   #
 # from immutable global constants, so they cannot vary in-process.    #
 # ------------------------------------------------------------------ #
-profiles=("${@:-default root broken-s3}")
+profiles=("${@:-default root broken-s3 bedrock}")
 # shellcheck disable=SC2206
 profiles=(${profiles[*]})
 
@@ -71,7 +83,31 @@ status=0
 for profile in "${profiles[@]}"; do
     echo ""
     echo "==> WordPress $WP_VERSION, integration suite, profile=$profile"
-    if ! WPCF_TEST_PROFILE="$profile" \
+
+    profile_env=()
+    if [ "$profile" = bedrock ]; then
+        # Configuration through the environment only: wp-tests-config.php
+        # defines no S3_* constants for this profile.
+        profile_env=(
+            WPCF_CONTENT_DIR="$bedrock_content_dir"
+            WPCF_PLUGIN_DIR="$bedrock_plugin_dir"
+            S3_KEY="$S3_TEST_KEY"
+            S3_SECRET="$S3_TEST_SECRET"
+            S3_BUCKET="${WPCF_TEST_BUCKET:-wp-cloud-files-test}"
+            S3_ENDPOINT="$S3_TEST_ENDPOINT"
+            S3_PUBLIC_URL="$S3_TEST_PUBLIC_URL"
+            S3_REGION="${S3_TEST_REGION:-us-east-1}"
+            S3_PATH_STYLE=true
+            S3_DIRECT_UPLOADS=true
+        )
+    else
+        profile_env=(
+            WPCF_CONTENT_DIR="$classic_content_dir"
+            WPCF_PLUGIN_DIR="$ROOT"
+        )
+    fi
+
+    if ! env "${profile_env[@]}" WPCF_TEST_PROFILE="$profile" \
         "$ROOT/tests/tools/vendor/bin/phpunit" \
         -c "$ROOT/tests/phpunit-integration.xml"; then
         status=1

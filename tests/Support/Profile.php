@@ -24,6 +24,13 @@ final class Profile
     /** S3_ENDPOINT points at a closed port, so every S3 call throws. */
     public const BROKEN_S3 = 'broken-s3';
 
+    /**
+     * Bedrock layout: content dir "app", the plugin installed without its own
+     * vendor/, DISALLOW_FILE_MODS, and every S3_* setting from the environment
+     * instead of constants.
+     */
+    public const BEDROCK = 'bedrock';
+
     public static function current(): string
     {
         $profile = getenv('WPCF_TEST_PROFILE');
