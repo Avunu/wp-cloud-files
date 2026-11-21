@@ -26,11 +26,12 @@
 
       # ------------------------------------------------------------------ #
       # Plugin metadata, read once and shared by packages/checks.           #
-      # composer.json owns the version (Release Please bumps it); the       #
-      # index.php plugin header owns the WordPress compatibility range.     #
+      # The Release Please manifest owns the version (composer.json has     #
+      # none: Packagist takes versions from git tags); the index.php plugin #
+      # header owns the WordPress compatibility range.                      #
       # ------------------------------------------------------------------ #
       composerData = builtins.fromJSON (builtins.readFile ./composer.json);
-      version = composerData.version;
+      version = (builtins.fromJSON (builtins.readFile ./.release-please-manifest.json)).".";
 
       # Read a plugin header field out of index.php. That file is the single
       # source of truth for WordPress compatibility because plugin-update-checker
@@ -129,6 +130,10 @@
               pkgs.c4.composerSetupHook
             ];
 
+            # composer.json carries no version and the sandbox has no .git, so
+            # tell Composer which version the root package is.
+            COMPOSER_ROOT_VERSION = version;
+
             buildPhase = ''
               runHook preBuild
               composer --no-ansi install --no-dev --no-interaction --optimize-autoloader
@@ -154,9 +159,9 @@
                   || { echo "index.php is missing the '$header:' plugin header line" >&2; exit 1; }
               done
 
-              # Stamp the WordPress plugin header version from composer.json, which is the
-              # single source of truth (Release Please bumps it). WordPress and the update
-              # checker read this header to detect new versions.
+              # Stamp the WordPress plugin header version from the Release Please manifest,
+              # which is the single source of truth. WordPress and the update checker read
+              # this header to detect new versions.
               sed -i -E "s|^([[:space:]]*\* Version:[[:space:]]*).*|\1${version}|" "$pluginDir/index.php"
 
               # Re-stamp the compatibility range from the values Nix parsed out of the
@@ -325,8 +330,8 @@
               '';
         in
         {
-          # Fails the build when the committed plugin header drifts from
-          # composer.json. This matters because plugin-update-checker reads
+          # Fails the build when the committed plugin header drifts from the
+          # Release Please manifest. This matters because plugin-update-checker reads
           # index.php from the git tag, so the committed value is what users
           # actually see -- the build-time stamp cannot rescue a wrong commit.
           plugin-header = pkgs.runCommand "check-plugin-header" { src = self; } ''
@@ -344,7 +349,7 @@
               fi
             }
 
-            check 'Version'           "$(get 'Version')"           '${version}'    'composer.json version'
+            check 'Version'           "$(get 'Version')"           '${version}'    '.release-please-manifest.json'
             check 'Tested up to'      "$(get 'Tested up to')"      '${wpTested}'   'the value Nix parsed'
             check 'Requires at least' "$(get 'Requires at least')" '${wpRequires}' 'the value Nix parsed'
 
