@@ -28,13 +28,13 @@ class S3Client
         if ($this->client === null) {
             $this->client = new AwsS3Client([
                 'credentials' => [
-                    'key'    => S3_KEY,
-                    'secret' => S3_SECRET,
+                    'key'    => Config::string('S3_KEY'),
+                    'secret' => Config::string('S3_SECRET'),
                 ],
-                'region' => defined('S3_REGION') ? S3_REGION : 'us-east-1',
+                'region' => Config::string('S3_REGION', 'us-east-1'),
                 'version' => 'latest',
-                'endpoint' => S3_ENDPOINT,
-                'use_path_style_endpoint' => defined('S3_PATH_STYLE') ? S3_PATH_STYLE : true,
+                'endpoint' => Config::string('S3_ENDPOINT'),
+                'use_path_style_endpoint' => Config::bool('S3_PATH_STYLE', true),
                 // The SDK default (when_supported) validates the CRC of any
                 // response that carries an x-amz-checksum-* header, even one it
                 // never asked for. downloadFile() reads a non-seekable stream,
@@ -60,8 +60,8 @@ class S3Client
             // Create adapter and filesystem
             $adapter = new AwsS3V3Adapter(
                 $this->getClient(),
-                S3_BUCKET,
-                defined('S3_ROOT') ? S3_ROOT : '',
+                Config::string('S3_BUCKET'),
+                Config::string('S3_ROOT'),
                 $visibility
             );
 
@@ -79,8 +79,9 @@ class S3Client
     {
         $key = ltrim($path, '/');
 
-        if (defined('S3_ROOT') && S3_ROOT) {
-            $key = trim(S3_ROOT, '/') . '/' . $key;
+        $root = Config::string('S3_ROOT');
+        if ($root !== '') {
+            $key = trim($root, '/') . '/' . $key;
         }
 
         return $key;
@@ -97,7 +98,7 @@ class S3Client
     public function createPresignedPutUrl(string $path, string $contentType = '', string $expires = '+15 minutes'): string
     {
         $args = [
-            'Bucket' => S3_BUCKET,
+            'Bucket' => Config::string('S3_BUCKET'),
             'Key'    => $this->prefixKey($path),
         ];
 
@@ -106,8 +107,9 @@ class S3Client
         }
 
         // Only sign an ACL when explicitly configured; public buckets / R2 reject ACLs.
-        if (defined('S3_UPLOAD_ACL') && S3_UPLOAD_ACL) {
-            $args['ACL'] = S3_UPLOAD_ACL;
+        $acl = Config::string('S3_UPLOAD_ACL');
+        if ($acl !== '') {
+            $args['ACL'] = $acl;
         }
 
         $client = $this->getClient();
@@ -152,10 +154,11 @@ class S3Client
 
     public function getPublicUrl(string $path): string
     {
-        $baseUrl = rtrim(S3_PUBLIC_URL, '/');
+        $baseUrl = rtrim(Config::string('S3_PUBLIC_URL'), '/');
 
-        if (defined('S3_ROOT') && S3_ROOT) {
-            $baseUrl .= '/' . trim(S3_ROOT, '/');
+        $root = Config::string('S3_ROOT');
+        if ($root !== '') {
+            $baseUrl .= '/' . trim($root, '/');
         }
 
         return $baseUrl . '/' . ltrim($path, '/');
