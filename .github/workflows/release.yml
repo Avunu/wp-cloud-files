@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Release Please
         id: release
-        uses: googleapis/release-please-action@v5
+        uses: googleapis/release-please-action@v5.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Uses release-please-config.json + .release-please-manifest.json.
@@ -49,16 +49,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@v23
         if: runner.environment == 'github-hosted'
 
       - name: Cache Nix git fetches
         # The self-hosted runner keeps ~/.cache/nix between jobs; restoring a snapshot
         # over that live fetcher-cache database corrupts it.
         if: runner.environment == 'github-hosted'
-        uses: actions/cache@v6
+        uses: actions/cache@v6.1.0
         with:
           path: |
             ~/.cache/nix/gitv3

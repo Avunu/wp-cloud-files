@@ -1,0 +1,34 @@
+name: Actions lock
+
+# Verifies .github/workflows/actions.lock. It lives in its own workflow so a lock failure
+# is reported here and never fails the tests.yml gate that release.yml calls.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          # The verify step authenticates with GH_TOKEN and needs no git credentials.
+          persist-credentials: false
+
+      - name: Install gh-actions-lock
+        run: |
+          if ! gh extension list | grep -q 'github/gh-actions-lock'; then
+            gh extension install github/gh-actions-lock --pin v0.5.1
+          fi
+
+      - name: Verify the actions lockfile
+        run: gh actions-lock --verify
