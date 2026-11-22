@@ -58,11 +58,15 @@ $table_prefix = 'wptests_';
 // ABSPATH because core lives in a read-only-ish download cache.       //
 // ------------------------------------------------------------------ //
 $wpcfContentDir = rtrim($wpcfEnv('WPCF_CONTENT_DIR'), '/');
+$wpcfProfile = getenv('WPCF_TEST_PROFILE') ?: 'default';
+
+// Bedrock serves the content dir as /app rather than /wp-content.
+$wpcfContentUrl = 'http://example.org/' . ($wpcfProfile === 'bedrock' ? 'app' : 'wp-content');
 
 define('WP_CONTENT_DIR', $wpcfContentDir);
-define('WP_CONTENT_URL', 'http://example.org/wp-content');
+define('WP_CONTENT_URL', $wpcfContentUrl);
 define('WP_PLUGIN_DIR', $wpcfContentDir . '/plugins');
-define('WP_PLUGIN_URL', 'http://example.org/wp-content/plugins');
+define('WP_PLUGIN_URL', $wpcfContentUrl . '/plugins');
 define('WP_TEMP_DIR', sys_get_temp_dir());
 
 // ------------------------------------------------------------------ //
@@ -80,8 +84,18 @@ define('WP_ACCESSIBLE_HOSTS', '127.0.0.1,localhost');
 // ------------------------------------------------------------------ //
 // The plugin under test                                               //
 // ------------------------------------------------------------------ //
-$wpcfProfile = getenv('WPCF_TEST_PROFILE') ?: 'default';
 $wpcfBucket = $wpcfEnv('WPCF_TEST_BUCKET', 'wp-cloud-files-test');
+
+if ($wpcfProfile === 'bedrock') {
+    // Bedrock's production shape: no file modifications, and every S3_*
+    // setting comes from the environment (tests/bin/run-integration.sh sets
+    // them), so not one S3_* constant is defined.
+    define('DISALLOW_FILE_MODS', true);
+
+    unset($wpcfEnv, $wpcfProfile, $wpcfBucket, $wpcfContentDir, $wpcfContentUrl);
+
+    return;
+}
 
 define('S3_KEY', $wpcfEnv('S3_TEST_KEY'));
 define('S3_SECRET', $wpcfEnv('S3_TEST_SECRET'));
@@ -104,4 +118,4 @@ if ($wpcfProfile === 'root') {
     define('S3_ROOT', 'uploads');
 }
 
-unset($wpcfEnv, $wpcfProfile, $wpcfBucket, $wpcfContentDir);
+unset($wpcfEnv, $wpcfProfile, $wpcfBucket, $wpcfContentDir, $wpcfContentUrl);

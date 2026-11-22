@@ -152,4 +152,42 @@ final class UrlRewriterTest extends UnitTestCase
 
         $this->assertSame($sources[150]['url'], $result[150]['url']);
     }
+
+    // ---------------------------------------------------------------- //
+    // Exclusions                                                       //
+    // ---------------------------------------------------------------- //
+
+    public function testAPrivateFileKeepsItsLocalUrl(): void
+    {
+        $url = 'http://example.org/wp-content/uploads/woocommerce_uploads/2026/08/album.zip';
+
+        $this->assertSame($url, $this->rewriter->rewriteAttachmentUrl($url, 7));
+    }
+
+    public function testTheFilterCanKeepAnAttachmentLocal(): void
+    {
+        Monkey\Filters\expectApplied('wpcf_should_offload')
+            ->once()
+            ->with(true, '2026/08/photo.jpg', 7)
+            ->andReturn(false);
+
+        $url = 'http://example.org/wp-content/uploads/2026/08/photo.jpg';
+
+        $this->assertSame($url, $this->rewriter->rewriteAttachmentUrl($url, 7));
+    }
+
+    public function testPrivateSrcsetEntriesKeepTheirLocalUrls(): void
+    {
+        $sources = [
+            150 => [
+                'url'        => 'http://example.org/wp-content/uploads/woocommerce_uploads/2026/08/cover-150x150.jpg',
+                'descriptor' => 'w',
+                'value'      => 150,
+            ],
+        ];
+
+        $result = $this->rewriter->rewriteSrcsetUrls($sources, [], '', [], 7);
+
+        $this->assertSame($sources[150]['url'], $result[150]['url']);
+    }
 }

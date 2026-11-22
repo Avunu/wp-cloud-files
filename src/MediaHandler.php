@@ -17,6 +17,13 @@ class MediaHandler
             return $metadata;
         }
 
+        // Private files (S3_EXCLUDE_PREFIXES, `wpcf_should_offload`) are
+        // neither uploaded nor removed locally.
+        $relativePath = $this->getOriginalFilePath($metadata, $attachmentId);
+        if ($relativePath !== '' && !Exclusions::shouldOffload($relativePath, $attachmentId)) {
+            return $metadata;
+        }
+
         // Check if metadata is complete
         if (!$this->isMetadataComplete($metadata, $attachmentId)) {
             return $metadata;
@@ -33,8 +40,8 @@ class MediaHandler
             $uploads = wp_upload_dir();
             $basedir = trailingslashit($uploads['basedir']);
 
-            // Get the file path - either from metadata or directly from attachment
-            $mainFilePath = $this->getOriginalFilePath($metadata, $attachmentId);
+            // The file path, from metadata or directly from the attachment.
+            $mainFilePath = $relativePath;
 
             if (empty($mainFilePath)) {
                 if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -135,6 +142,61 @@ class MediaHandler
         }
 
         return '';
+    }
+
+    /**
+     * `wp_unique_filename`: also avoid names that are already taken in the
+     * bucket.
+     *
+     * WordPress only checks the local directory, and in an offloaded library
+     * that directory is mostly empty, so a second "photo.jpg" in the same month
+     * would be uploaded over the first attachment's object. Skipped for excluded
+     * paths (they never reach the bucket) and when a custom callback is naming
+     * the file.
+     *
+     * @param string        $filename Unique file name WordPress chose.
+     * @param string        $ext      Extension, with the leading dot.
+     * @param string        $dir      Absolute directory the file goes in.
+     * @param callable|null $callback Custom naming callback, if any.
+     */
+    public function uniqueFilename($filename, $ext = '', $dir = '', $callback = null): string
+    {
+        $filename = (string) $filename;
+        if ($filename === '' || $callback !== null || !is_string($dir) || $dir === '') {
+            return $filename;
+        }
+
+        $uploads = wp_upload_dir(null, false);
+        $basedir = trailingslashit((string) $uploads['basedir']);
+        $dir = trailingslashit($dir);
+
+        if (!str_starts_with($dir, $basedir)) {
+            return $filename;
+        }
+
+        $subdir = substr($dir, strlen($basedir));
+        if (!Exclusions::shouldOffload($subdir . $filename)) {
+            return $filename;
+        }
+
+        $s3Client = S3Client::getInstance();
+        if (!$s3Client->fileExists($subdir . $filename)) {
+            return $filename;
+        }
+
+        $extension = pathinfo($filename, PATHINFO_EXTENSION);
+        $suffix = $extension !== '' ? '.' . $extension : '';
+        $name = $extension !== '' ? substr($filename, 0, -strlen($suffix)) : $filename;
+
+        // Bounded like RestController::uniqueKey(): every probe is a request.
+        for ($number = 1; $number <= 100; $number++) {
+            $candidate = "{$name}-{$number}{$suffix}";
+            if (!file_exists($dir . $candidate) && !$s3Client->fileExists($subdir . $candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $name . '-' . bin2hex(random_bytes(4)) . $suffix;
     }
 
     /**

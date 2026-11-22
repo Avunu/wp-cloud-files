@@ -42,6 +42,13 @@ class ThumbnailHandler
             return $metadata;
         }
 
+        // A private document (S3_EXCLUDE_PREFIXES) gets no public preview
+        // images; the file stays where its plugin put it.
+        $relativePath = (string) get_post_meta($attachmentId, '_wp_attached_file', true);
+        if ($relativePath !== '' && !Exclusions::shouldOffload($relativePath, $attachmentId)) {
+            return $metadata;
+        }
+
         $filePath = get_attached_file($attachmentId);
 
         if (empty($filePath) || !file_exists($filePath)) {

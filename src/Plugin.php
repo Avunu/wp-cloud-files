@@ -19,17 +19,18 @@ class Plugin
     public const MODE_READ_ONLY = 'read-only';
 
     /**
-     * Which mode the defined constants allow, or null for "not configured".
+     * Which mode the configuration allows, or null for "not configured".
      *
-     * Serving needs the bucket, the endpoint and the public URL; storing needs
-     * credentials as well. Outside production, credentials are optional: a
+     * Settings come from constants or, failing that, the environment (see
+     * Config). Serving needs the bucket, the endpoint and the public URL;
+     * storing needs credentials as well. Outside production, credentials are optional: a
      * development checkout renders the site's existing media from the public
      * URL without holding a key that could write to the production bucket.
      */
     public static function configuredMode(): ?string
     {
-        $canServe = defined('S3_BUCKET') && defined('S3_ENDPOINT') && defined('S3_PUBLIC_URL');
-        $canStore = defined('S3_KEY') && defined('S3_SECRET');
+        $canServe = Config::has('S3_BUCKET') && Config::has('S3_ENDPOINT') && Config::has('S3_PUBLIC_URL');
+        $canStore = Config::has('S3_KEY') && Config::has('S3_SECRET');
         if ($canServe && $canStore) {
             return self::MODE_FULL;
         }
@@ -63,6 +64,14 @@ class Plugin
         // Initialize the handlers that write to the bucket.
         $mediaHandler = new MediaHandler();
         $thumbnailHandler = new ThumbnailHandler();
+
+        // Executables never reach uploads/, let alone the public bucket.
+        add_filter('wp_handle_upload_prefilter', [ExecutableGuard::class, 'filterUpload']);
+        add_filter('wp_handle_sideload_prefilter', [ExecutableGuard::class, 'filterUpload']);
+
+        // A local file name is only unique among local files; once a library is
+        // offloaded most of them are gone, so also check the bucket.
+        add_filter('wp_unique_filename', [$mediaHandler, 'uniqueFilename'], 10, 4);
 
         // Process complete media after WordPress is done with it
         add_filter('wp_update_attachment_metadata', [$mediaHandler, 'processMedia'], 999, 2);
@@ -120,20 +129,20 @@ class Plugin
 
     private static function directUploadsEnabled(): bool
     {
-        return defined('S3_DIRECT_UPLOADS') && S3_DIRECT_UPLOADS;
+        return Config::bool('S3_DIRECT_UPLOADS');
     }
 
     private static function directUploadMinSize(): int
     {
-        return (defined('S3_DIRECT_UPLOAD_MIN_SIZE') && S3_DIRECT_UPLOAD_MIN_SIZE)
-            ? (int) S3_DIRECT_UPLOAD_MIN_SIZE
-            : 0;
+        return max(0, Config::int('S3_DIRECT_UPLOAD_MIN_SIZE'));
     }
 
     private static function directUploadMaxSize(): int
     {
-        return (defined('S3_MAX_UPLOAD_SIZE') && S3_MAX_UPLOAD_SIZE)
-            ? (int) S3_MAX_UPLOAD_SIZE
+        $size = Config::int('S3_MAX_UPLOAD_SIZE');
+
+        return $size > 0
+            ? $size
             : 5 * 1024 * 1024 * 1024; // 5 GiB — common single-PUT ceiling
     }
 

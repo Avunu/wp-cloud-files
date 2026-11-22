@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Avunu\WPCloudFiles\Tests\Integration;
 
+use Avunu\WPCloudFiles\Config;
 use Avunu\WPCloudFiles\S3Client;
 use Avunu\WPCloudFiles\Tests\Support\WPTestCase;
 
@@ -86,7 +87,7 @@ final class S3ClientTest extends WPTestCase
     {
         $url = $this->client()->createPresignedPutUrl('2026/08/presigned.txt', 'text/plain');
 
-        $this->assertStringStartsWith(rtrim(S3_ENDPOINT, '/'), $url);
+        $this->assertStringStartsWith(rtrim(Config::string('S3_ENDPOINT'), '/'), $url);
 
         $response = wp_remote_request($url, [
             'method'  => 'PUT',

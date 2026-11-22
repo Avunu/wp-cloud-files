@@ -10,7 +10,13 @@ WP Cloud Files is a WordPress plugin that seamlessly integrates your WordPress m
   web server and any upload-size-limited proxy (e.g. Cloudflare's 100 MB cap)
 - Support for all standard WordPress image sizes and optimizations
 - Generate thumbnails for documents (PDF, Word, Excel, PowerPoint)
-- WP-CLI command for migrating existing media library to S3
+- WP-CLI commands to migrate an existing library, rewrite stored URLs, and check
+  (`verify`, `status`, `inventory`) what is where
+- Keeps private files (WooCommerce downloads, form uploads, invoices) local and out
+  of the public bucket
+- Refuses executable files on every path into uploads and the bucket
+- Configurable through constants or environment variables, and installable with
+  Composer (Bedrock) as well as from the release zip
 - Supports WebP and AVIF alternatives when enabled in WordPress
 - Handles image editing and regeneration workflows
 
@@ -19,7 +25,7 @@ WP Cloud Files is a WordPress plugin that seamlessly integrates your WordPress m
 - WordPress (tested with latest version)
 - PHP 8.3 or higher
 - S3-compatible storage provider (AWS S3, DigitalOcean Spaces, MinIO, etc.)
-- Composer (for installing dependencies)
+- Composer, only when installing from source or as a Composer package
 
 ## Installation
 
@@ -33,6 +39,22 @@ WP Cloud Files is a WordPress plugin that seamlessly integrates your WordPress m
 The release zip bundles all Composer dependencies, so there is no separate `composer install`
 step. Once installed, the plugin checks GitHub for new releases and offers one-click updates
 through the normal WordPress Plugins screen.
+
+### With Composer (Bedrock and other Composer-managed sites)
+
+```bash
+composer require avunu/wp-cloud-files
+```
+
+The package has type `wordpress-plugin`, so `composer/installers` puts it in the
+plugins directory (`web/app/plugins/wp-cloud-files` on Bedrock). Its dependencies
+are installed into the project's `vendor/` and loaded by the project autoloader;
+the plugin only loads its own `vendor/autoload.php` when that file exists (the
+release zip). Under Composer, and on any site with `DISALLOW_FILE_MODS`, the GitHub
+self-updater is not loaded: Composer owns updates.
+
+Configure it with environment variables (see below), so `config/application.php`
+needs no changes.
 
 ### From source (development)
 
@@ -62,7 +84,12 @@ the TypeScript Native Preview extension. Pointing your editor's TSDK at
 
 ## Configuration
 
-Add the following constants to your `wp-config.php` file:
+Every setting can be a constant in `wp-config.php` or an environment variable of
+the same name. A constant wins when both are set; an empty environment variable
+counts as unset. Boolean settings read from the environment accept `true`/`false`,
+`1`/`0`, `yes`/`no` and `on`/`off`.
+
+As constants:
 
 ```php
 // S3 API credentials
@@ -85,7 +112,60 @@ define('S3_DIRECT_UPLOAD_MIN_SIZE', 0);   // Min bytes to route direct; 0 = all 
 define('S3_MAX_UPLOAD_SIZE', 5368709120); // Advertised max upload size in bytes (default 5 GiB)
 define('S3_UPLOAD_ACL', 'public-read');   // Sign this ACL on the PUT. Omit for public buckets / R2
 define('S3_PRESIGN_EXPIRES', '+15 minutes'); // Presigned URL lifetime (default '+15 minutes')
+
+// Uploads-relative prefixes that are never offloaded (default shown)
+define('S3_EXCLUDE_PREFIXES', 'woocommerce_uploads/,fluentform/,gravity_forms/,wpo_wcpdf,wc-logs/');
 ```
+
+Or as environment variables, for example in a Bedrock `.env` or a container's
+environment:
+
+```bash
+S3_KEY=your-access-key
+S3_SECRET=your-secret-key
+S3_BUCKET=your-bucket-name
+S3_ENDPOINT=https://your-s3-endpoint.com
+S3_PUBLIC_URL=https://media.example.com
+S3_PATH_STYLE=true
+S3_DIRECT_UPLOADS=true
+```
+
+### Private files stay local
+
+Some plugins keep private files under uploads and guard access to them
+themselves. Copying them to a public bucket would publish them. Files whose
+uploads-relative path starts with one of `S3_EXCLUDE_PREFIXES` are never uploaded,
+never deleted locally, and keep their local URL, in every code path: new uploads,
+document thumbnails, direct uploads, `migrate` (even with `--force`) and
+`migrate-urls`.
+
+The default list covers WooCommerce downloadable products
+(`woocommerce_uploads/`), Fluent Forms and Gravity Forms entries, WooCommerce PDF
+Invoices (`wpo_wcpdf`, which matches its `wpo_wcpdf_<hash>/` directory) and
+WooCommerce logs. Setting `S3_EXCLUDE_PREFIXES` replaces the default list; end a
+prefix with `/` to match one directory exactly. To exclude nothing, define the
+constant as `''`, or set the environment variable to `,` (an empty environment
+variable counts as unset and keeps the default list).
+
+For decisions a prefix cannot express, use the filter:
+
+```php
+add_filter('wpcf_should_offload', function (bool $offload, string $path, int $attachmentId): bool {
+    return $offload && !get_post_meta($attachmentId, 'members_only', true);
+}, 10, 3);
+```
+
+Direct browser uploads leave purpose-specific uploaders (WooCommerce's downloadable
+file picker) on the normal upload path, so WooCommerce can still place those files
+in its private directory.
+
+### Executable files are refused
+
+Scripts and programs (`.php` and its variants, `.phar`, `.cgi`, shell scripts,
+Windows executables, `.htaccess`, and anything whose content sniffs as one) are
+refused when uploaded, are never given a presigned upload URL, and are never
+written to the bucket, even if a site's `upload_mimes` filter allows them. An
+interpreter extension anywhere in the name counts (`shell.php.jpg`).
 
 ### Without credentials (development)
 
@@ -167,6 +247,45 @@ wp wp-cloud-files migrate --force
 wp wp-cloud-files migrate --batch-size=10
 ```
 
+`migrate` never replaces an object that is already in the bucket unless you pass
+`--force`; the local file is kept in that case.
+
+### Rewriting stored URLs
+
+```bash
+# Preview, then rewrite the uploads URL to S3_PUBLIC_URL across the database
+wp wp-cloud-files migrate-urls --dry-run
+wp wp-cloud-files migrate-urls
+
+# Leave files that stay on the local volume on the local URL
+wp wp-cloud-files migrate-urls --exclude-prefix=cwicly/,fonts/
+```
+
+`migrate-urls` wraps `wp search-replace`. URLs under `S3_EXCLUDE_PREFIXES` and any
+`--exclude-prefix` are left alone through a regular-expression lookahead, and the
+replacement runs twice: for plain URLs, and for the JSON-escaped form
+(`https:\/\/…`) that block attributes, `wp_font_face` posts and page builders store.
+
+### Checking a site
+
+```bash
+# Configuration, with the source of every setting; credentials are never shown
+wp wp-cloud-files status
+wp wp-cloud-files status --format=json
+
+# Every file of 20 random attachments (or --all) must be in the bucket, and no
+# private file may be. Exits non-zero otherwise.
+wp wp-cloud-files verify
+wp wp-cloud-files verify --all --format=json
+
+# What is in the local uploads directory: attachment folders, private folders,
+# public files generated by plugins (Cwicly CSS, the Font Library), and unknowns.
+wp wp-cloud-files inventory --json
+```
+
+`inventory --json` includes `non_attachment_prefixes`, the list to pass to
+`migrate-urls --exclude-prefix` for files that are not media library attachments.
+
 ### Document Thumbnails
 
 The plugin automatically generates thumbnails for supported document types:
@@ -199,7 +318,8 @@ On every push to `main`, the [Release workflow](.github/workflows/release.yml) o
 a **release PR** that accumulates the pending changes and previews the next version + changelog.
 Merging that PR:
 
-1. bumps the version in `composer.json` (and the root `VERSION` file) and updates `CHANGELOG.md`;
+1. bumps the version in `.release-please-manifest.json` and the `index.php` plugin header, and
+   updates `CHANGELOG.md`;
 2. creates the git tag and a GitHub Release with notes generated from the commits;
 3. builds the plugin on a Nix runner (`nix build .#zip`) and attaches `wp-cloud-files.zip`
    (with `vendor/` bundled) as the release asset.
@@ -207,9 +327,10 @@ Merging that PR:
 Client sites then pick up the new version automatically via
 [plugin-update-checker](https://github.com/YahnisElsts/plugin-update-checker).
 
-The version in the `index.php` plugin header is stamped from `composer.json` at build time, so
-`composer.json` is the single source of truth. (A from-source/dev checkout may show a stale
-header version until built — the published zip is always correct.)
+`composer.json` carries no `version`: Packagist reads versions from the git tags, so the tag
+Release Please creates is the Composer release too. The Nix build reads the version from
+`.release-please-manifest.json`, and the `plugin-header` check fails if the committed
+`index.php` header disagrees with it.
 
 > **Repo setting:** Settings → Actions → General → Workflow permissions must allow
 > "Read and write permissions" and "Allow GitHub Actions to create and approve pull requests"

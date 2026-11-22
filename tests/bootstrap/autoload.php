@@ -40,6 +40,29 @@ if (!is_file($toolsVendor . '/autoload.php')) {
 require_once $toolsVendor . '/autoload.php';
 
 /*
+ * The Bedrock fixture installs a copy of the plugin without its own vendor/.
+ * A Bedrock project's autoloader maps the plugin's namespace into that copy,
+ * so do the same, ahead of the repo's classmap (registered after both
+ * Composer autoloaders, which prepend themselves): plugin code then runs from
+ * the fixture directory, where any path relative to the plugin (vendor/dompdf,
+ * for instance) really is missing.
+ */
+$fixturePlugin = getenv('WPCF_PLUGIN_DIR');
+if (is_string($fixturePlugin) && $fixturePlugin !== '' && realpath($fixturePlugin) !== realpath($root)) {
+    spl_autoload_register(static function (string $class) use ($fixturePlugin): void {
+        $prefix = 'Avunu\\WPCloudFiles\\';
+        if (!str_starts_with($class, $prefix) || str_starts_with($class, $prefix . 'Tests\\')) {
+            return;
+        }
+
+        $file = rtrim($fixturePlugin, '/') . '/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+        if (is_file($file)) {
+            require $file;
+        }
+    }, true, true);
+}
+
+/*
  * Test classes get a hand-rolled autoloader rather than an `autoload-dev` entry
  * in the root composer.json. The plugin sets config.classmap-authoritative, which
  * makes Composer's autoloader classmap-only -- a PSR-4 rule for tests/ would then

@@ -41,6 +41,12 @@ namespace {
             /** @var list<array{name: string, callable: mixed}> */
             public static array $commands = [];
 
+            /** @var list<array{args: list<string>, assoc_args: array<string, mixed>}> */
+            public static array $runs = [];
+
+            /** @var list<string> */
+            public static array $lines = [];
+
             public static function reset(): void
             {
                 self::$messages = [
@@ -51,6 +57,13 @@ namespace {
                     'error' => [],
                 ];
                 self::$commands = [];
+                self::$runs = [];
+                self::$lines = [];
+            }
+
+            public static function line(string $message = ''): void
+            {
+                self::$lines[] = $message;
             }
 
             public static function log(string $message): void
@@ -91,6 +104,17 @@ namespace {
             public static function add_command(string $name, $callable, array $args = []): void
             {
                 self::$commands[] = ['name' => $name, 'callable' => $callable];
+            }
+
+            /**
+             * Records the nested command instead of running it.
+             *
+             * @param list<string>         $args
+             * @param array<string, mixed> $assoc_args
+             */
+            public static function run_command(array $args, array $assoc_args = []): void
+            {
+                self::$runs[] = ['args' => $args, 'assoc_args' => $assoc_args];
             }
 
             /** @return mixed */
@@ -138,6 +162,19 @@ namespace WP_CLI\Utils {
         function make_progress_bar(string $message, int $count, int $interval = 100)
         {
             return new \cli\progress\Bar();
+        }
+    }
+
+    if (!function_exists('WP_CLI\Utils\format_items')) {
+        /**
+         * Records what would have been printed, as JSON, so tests can read it.
+         *
+         * @param array<int, array<string, mixed>> $items
+         * @param list<string>|string              $fields
+         */
+        function format_items(string $format, array $items, $fields): void
+        {
+            \WP_CLI::$lines[] = (string) json_encode(['format' => $format, 'items' => array_values($items)]);
         }
     }
 

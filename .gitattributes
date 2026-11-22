@@ -1,3 +1,19 @@
 # Test fixtures are real documents/images. Mark them binary so a future
 # `text=auto` never mangles them and diffs stay readable.
 tests/fixtures/** binary
+
+# Kept out of the archive Packagist installs (GitHub's zipball of the tag):
+# a Composer install gets the plugin itself, not its development tooling.
+/.github export-ignore
+/.envrc export-ignore
+/.release-please-manifest.json export-ignore
+/docs export-ignore
+/flake.lock export-ignore
+/flake.nix export-ignore
+/nix export-ignore
+/package-lock.json export-ignore
+/package.json export-ignore
+/release-please-config.json export-ignore
+/tests export-ignore
+/tsconfig.json export-ignore
+/types export-ignore

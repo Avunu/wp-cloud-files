@@ -1,8 +1,9 @@
 name: Release
 
 # Release Please maintains a release PR from Conventional Commits on main.
-# Merging that PR bumps composer.json + index.php + CHANGELOG.md, creates the tag
-# and GitHub Release (with auto-generated notes). The full test suite then runs
+# Merging that PR bumps .release-please-manifest.json + index.php + CHANGELOG.md,
+# creates the tag (which is also the Packagist release: composer.json has no
+# version) and GitHub Release (with auto-generated notes). The full test suite then runs
 # against the tagged commit and, only if it passes, the plugin zip is built with
 # Nix and attached as the release asset that client sites self-update from via
 # plugin-update-checker.

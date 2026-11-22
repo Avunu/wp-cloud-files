@@ -54,8 +54,11 @@ if (!defined('WP_TESTS_PHPUNIT_POLYFILLS_PATH')) {
     define('WP_TESTS_PHPUNIT_POLYFILLS_PATH', dirname(__DIR__) . '/tools/vendor/yoast/phpunit-polyfills');
 }
 
+// The plugin directory under test: the repo itself, or the Bedrock fixture's
+// copy (no vendor/ of its own), as set by tests/bin/run-integration.sh.
 tests_add_filter('muplugins_loaded', static function (): void {
-    require dirname(__DIR__, 2) . '/index.php';
+    $pluginDir = getenv('WPCF_PLUGIN_DIR') ?: dirname(__DIR__, 2);
+    require rtrim($pluginDir, '/') . '/index.php';
 });
 
 /*

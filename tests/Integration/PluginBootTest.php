@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Avunu\WPCloudFiles\Tests\Integration;
 
+use Avunu\WPCloudFiles\Config;
 use Avunu\WPCloudFiles\DirectUpload\DirectUploadProcessor;
 use Avunu\WPCloudFiles\DirectUpload\RestController;
 use Avunu\WPCloudFiles\MediaHandler;
@@ -28,7 +29,7 @@ final class PluginBootTest extends WPTestCase
      */
     public function testS3EndpointIsLoopback(): void
     {
-        $host = parse_url(S3_ENDPOINT, PHP_URL_HOST);
+        $host = parse_url(Config::string('S3_ENDPOINT'), PHP_URL_HOST);
 
         $this->assertContains(
             $host,
@@ -37,11 +38,13 @@ final class PluginBootTest extends WPTestCase
         );
     }
 
-    public function testRequiredConstantsAreDefinedSoPluginBootRuns(): void
+    public function testRequiredSettingsAreSetSoPluginBootRuns(): void
     {
-        foreach (['S3_KEY', 'S3_SECRET', 'S3_BUCKET', 'S3_ENDPOINT', 'S3_PUBLIC_URL'] as $constant) {
-            $this->assertTrue(defined($constant), "{$constant} must be defined or Plugin::boot() is skipped");
+        foreach (['S3_KEY', 'S3_SECRET', 'S3_BUCKET', 'S3_ENDPOINT', 'S3_PUBLIC_URL'] as $name) {
+            $this->assertTrue(Config::has($name), "{$name} must be set or Plugin::boot() is skipped");
         }
+
+        $this->assertSame(Plugin::MODE_FULL, Plugin::configuredMode());
     }
 
     public function testUrlRewritingHooksAreRegistered(): void
@@ -86,7 +89,7 @@ final class PluginBootTest extends WPTestCase
 
     public function testDirectUploadHooksAreRegisteredWhenEnabled(): void
     {
-        $this->assertTrue(defined('S3_DIRECT_UPLOADS') && S3_DIRECT_UPLOADS);
+        $this->assertTrue(Config::bool('S3_DIRECT_UPLOADS'));
 
         $this->assertHookedAt(10, 'rest_api_init', RestController::class, 'register');
         $this->assertHookedAt(100, 'admin_enqueue_scripts', Plugin::class, 'enqueueDirectUploadScript');

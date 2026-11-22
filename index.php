@@ -22,38 +22,48 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Load Composer autoloader
-$composerAutoloader = __DIR__ . '/vendor/autoload.php';
-if (file_exists($composerAutoloader)) {
-    require_once $composerAutoloader;
-} else {
-    // Log or notify that Composer dependencies are missing
+// Dependencies. The release zip bundles its own vendor/. Under Composer (a
+// Bedrock site, for example) the plugin directory has no vendor/ and the
+// project's autoloader, loaded before WordPress, already provides everything.
+$wpcfOwnVendor = __DIR__ . '/vendor/autoload.php';
+if (file_exists($wpcfOwnVendor)) {
+    require_once $wpcfOwnVendor;
+}
+
+if (!class_exists(\Aws\S3\S3Client::class)) {
     add_action('admin_notices', function () {
         echo '<div class="error"><p>';
-        echo 'WP Cloud Files plugin requires Composer dependencies to be installed. Please run "composer install" in the plugin directory.';
+        echo 'WP Cloud Files plugin requires its Composer dependencies. Install the release zip, which bundles them,'
+            . ' or require avunu/wp-cloud-files with Composer.';
         echo '</p></div>';
     });
     return; // Stop plugin initialization if dependencies are missing
 }
 
-// Self-update from GitHub releases. Registered before the S3-constant gate so
-// updates work even when the plugin isn't yet configured. The built zip attached
-// to each release bundles vendor/, so end users never need Composer.
-require_once __DIR__ . '/vendor/yahnis-elsts/plugin-update-checker/plugin-update-checker.php';
+// Self-update from GitHub releases, for installs of the release zip only. A
+// Composer-managed install is updated by Composer, and a site where file
+// modifications are off (DISALLOW_FILE_MODS) cannot install updates at all,
+// so neither loads the update checker. Registered before the S3 gate so updates work even when the
+// plugin isn't configured yet.
+if (file_exists($wpcfOwnVendor) && wp_is_file_mod_allowed('wp_cloud_files_update_checker')) {
+    require_once __DIR__ . '/vendor/yahnis-elsts/plugin-update-checker/plugin-update-checker.php';
 
-$wpcfUpdateChecker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-    'https://github.com/Avunu/wp-cloud-files/',
-    __FILE__,
-    'wp-cloud-files'
-);
-// Download the built release asset, not GitHub's source tarball (which lacks vendor/).
-// getVcsApi() is typed as the base Api; enableReleaseAssets() only exists on the
-// GitHub/GitLab implementations, so guard rather than assume the URL above never
-// changes host.
-$wpcfVcsApi = $wpcfUpdateChecker->getVcsApi();
-if ($wpcfVcsApi instanceof \YahnisElsts\PluginUpdateChecker\v5p7\Vcs\GitHubApi) {
-    $wpcfVcsApi->enableReleaseAssets('/wp-cloud-files\.zip$/');
+    $wpcfUpdateChecker = \YahnisElsts\PluginUpdateChecker\v6\PucFactory::buildUpdateChecker(
+        'https://github.com/Avunu/wp-cloud-files/',
+        __FILE__,
+        'wp-cloud-files'
+    );
+    // Download the built release asset, not GitHub's source tarball (which
+    // lacks vendor/). getVcsApi() is typed as the base Api, and
+    // enableReleaseAssets() only exists on the GitHub/GitLab implementations.
+    // Checking for the method rather than a versioned class name
+    // (v6p0\Vcs\GitHubApi) keeps this working across update-checker releases.
+    $wpcfVcsApi = $wpcfUpdateChecker->getVcsApi();
+    if (method_exists($wpcfVcsApi, 'enableReleaseAssets')) {
+        $wpcfVcsApi->enableReleaseAssets('/wp-cloud-files\.zip$/');
+    }
 }
+unset($wpcfOwnVendor);
 
 // Load autoloader
 spl_autoload_register(function ($class) {
@@ -80,7 +90,8 @@ add_action('plugins_loaded', function () {
     } else {
         add_action('admin_notices', function () {
             echo '<div class="error"><p>';
-            echo 'WP Cloud Files plugin requires S3_KEY, S3_SECRET, S3_BUCKET, S3_ENDPOINT, and S3_PUBLIC_URL constants to be defined.';
+            echo 'WP Cloud Files plugin requires S3_KEY, S3_SECRET, S3_BUCKET, S3_ENDPOINT, and S3_PUBLIC_URL,'
+                . ' as constants or environment variables.';
             echo '</p></div>';
         });
     }

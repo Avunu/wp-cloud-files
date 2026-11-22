@@ -2,6 +2,7 @@
 
 namespace Avunu\WPCloudFiles\DirectUpload;
 
+use Avunu\WPCloudFiles\Exclusions;
 use Avunu\WPCloudFiles\S3Client;
 
 /**
@@ -58,6 +59,12 @@ class DirectUploadProcessor
             $key = (string) get_post_meta($attachmentId, '_wp_attached_file', true);
         }
         if ($key === '') {
+            return;
+        }
+
+        // Never pull an excluded path down or push derivatives for it.
+        if (!Exclusions::shouldOffload($key, $attachmentId)) {
+            delete_post_meta($attachmentId, '_wpcf_pending_optimization');
             return;
         }
 

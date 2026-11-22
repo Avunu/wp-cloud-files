@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Avunu\WPCloudFiles\Tests\Integration;
 
+use Avunu\WPCloudFiles\Config;
 use Avunu\WPCloudFiles\Tests\Support\Profile;
 use Avunu\WPCloudFiles\Tests\Support\WPTestCase;
 
@@ -24,8 +25,8 @@ final class UrlRewriterEndToEndTest extends WPTestCase
     private function expectedBase(): string
     {
         return Profile::is(Profile::ROOT)
-            ? rtrim(S3_PUBLIC_URL, '/') . '/uploads'
-            : rtrim(S3_PUBLIC_URL, '/');
+            ? rtrim(Config::string('S3_PUBLIC_URL'), '/') . '/uploads'
+            : rtrim(Config::string('S3_PUBLIC_URL'), '/');
     }
 
     public function testAttachmentUrlPointsAtObjectStorageAndResolves(): void
@@ -40,8 +41,8 @@ final class UrlRewriterEndToEndTest extends WPTestCase
             $url,
             'the attachment URL must be rewritten to object storage'
         );
-        $this->assertStringNotContainsString(
-            '/wp-content/uploads/',
+        $this->assertStringStartsNotWith(
+            wp_upload_dir()['baseurl'],
             $url,
             'a local uploads path means the rewrite did not happen'
         );
@@ -107,7 +108,7 @@ final class UrlRewriterEndToEndTest extends WPTestCase
         }
 
         $this->assertStringNotContainsString(
-            '/wp-content/uploads/',
+            wp_upload_dir()['baseurl'],
             $srcset,
             'every srcset candidate must point at object storage'
         );

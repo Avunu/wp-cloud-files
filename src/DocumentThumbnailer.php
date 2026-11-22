@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Avunu\WPCloudFiles;
 
+use Composer\InstalledVersions;
 use PhpOffice\PhpPresentation\IOFactory as PresentationIOFactory;
 use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\Writer\PDF\DomPDF as PresentationPdfWriter;
 use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
+use PhpOffice\PhpSpreadsheet\Writer\Pdf as SpreadsheetPdfWriter;
 use PhpOffice\PhpWord\IOFactory as WordIOFactory;
 use PhpOffice\PhpWord\Settings as WordSettings;
 
@@ -65,18 +67,53 @@ class DocumentThumbnailer
 
     private function setupDomPdf(): void
     {
-        // Resolve relative to this file, not to WP_PLUGIN_DIR plus a hardcoded
-        // directory name: installing the plugin under any other folder name (or
-        // symlinking it, as the test harness and most dev setups do) left DomPDF
-        // silently unconfigured, and every Word/Excel thumbnail then failed with
-        // nothing but a WP_DEBUG log line to show for it.
-        $domPdfPath = dirname(__DIR__) . '/vendor/dompdf/dompdf';
-        if (file_exists($domPdfPath)) {
+        $domPdfPath = self::domPdfPath();
+        if ($domPdfPath !== null) {
             WordSettings::setPdfRendererPath($domPdfPath);
             WordSettings::setPdfRendererName(WordSettings::PDF_RENDERER_DOMPDF);
         } else {
-            $this->log("DomPDF path not found at {$domPdfPath}");
+            $this->log('DomPDF is not installed; Word thumbnails are disabled');
         }
+
+        // PhpWord's own scratch files.
+        WordSettings::setTempDir(self::tempDir());
+    }
+
+    /**
+     * Where dompdf/dompdf is installed, wherever Composer put it.
+     *
+     * Asking Composer finds it both in the release zip (the plugin's own
+     * vendor/) and in a Bedrock site, where the plugin directory has no vendor/
+     * and every package lives in the project's vendor/. A path relative to this
+     * file only covers the first, and a wrong path leaves every Word thumbnail
+     * failing with nothing but a WP_DEBUG log line to show for it.
+     */
+    public static function domPdfPath(): ?string
+    {
+        if (class_exists(InstalledVersions::class) && InstalledVersions::isInstalled('dompdf/dompdf')) {
+            $path = InstalledVersions::getInstallPath('dompdf/dompdf');
+            if (is_string($path) && is_dir($path)) {
+                return rtrim((string) (realpath($path) ?: $path), '/');
+            }
+        }
+
+        $bundled = dirname(__DIR__) . '/vendor/dompdf/dompdf';
+
+        return is_dir($bundled) ? $bundled : null;
+    }
+
+    /**
+     * The directory for every temporary file the converters write.
+     *
+     * get_temp_dir() honours WP_TEMP_DIR and otherwise falls back to the
+     * system temp dir, so nothing is ever written inside the plugin or vendor
+     * directory, which is read-only on an immutable deployment.
+     */
+    public static function tempDir(): string
+    {
+        $dir = function_exists('get_temp_dir') ? get_temp_dir() : sys_get_temp_dir();
+
+        return rtrim($dir, '/\\');
     }
 
     private function log(string $message): void
@@ -165,6 +202,11 @@ class DocumentThumbnailer
                 case 'spreadsheet':
                     $document = SpreadsheetIOFactory::createReader($formatInfo['format'])->load($filePath);
                     $writer = SpreadsheetIOFactory::createWriter($document, 'Mpdf');
+                    // mPDF writes its font cache under this; it would
+                    // otherwise use a directory inside vendor/.
+                    if ($writer instanceof SpreadsheetPdfWriter) {
+                        $writer->setTempDir(self::tempDir());
+                    }
                     break;
 
                 case 'presentation':
@@ -232,7 +274,7 @@ class DocumentThumbnailer
      */
     protected function getTemporaryPath(): string
     {
-        return sys_get_temp_dir() . '/' . uniqid('docthumb_', true) . '.pdf';
+        return self::tempDir() . '/' . uniqid('docthumb_', true) . '.pdf';
     }
 
     /**
@@ -292,7 +334,7 @@ class DocumentThumbnailer
                     // never exceeds the requested box.
                     $frame->scaleImage($dimensions['width'], $dimensions['height'], true);
 
-                    $path = sys_get_temp_dir() . '/' . uniqid('thumbnail_', true) . '.jpg';
+                    $path = self::tempDir() . '/' . uniqid('thumbnail_', true) . '.jpg';
                     $frame->writeImage($path);
                     $thumbnails[$name] = $path;
                 } finally {
