@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.6.0](https://github.com/Avunu/wp-cloud-files/compare/v0.5.2...v0.6.0) (2026-11-22)
+
+
+### Features
+
+* **cli:** add status, verify and inventory; migrate-urls --exclude-prefix ([8ef90ba](https://github.com/Avunu/wp-cloud-files/commit/8ef90babf8513d1f8426cfdb8eeca761267a56f3))
+* keep private upload paths out of the bucket (S3_EXCLUDE_PREFIXES) ([04d00e1](https://github.com/Avunu/wp-cloud-files/commit/04d00e15b98e6b2fb5a50e31ce903ae270aa6318))
+* read S3_* settings from the environment when no constant is defined ([fa3c8cf](https://github.com/Avunu/wp-cloud-files/commit/fa3c8cf8fbb3ed6abb611139bae670a65e9678bf))
+* refuse executable files and never overwrite another attachment's object ([624d6d1](https://github.com/Avunu/wp-cloud-files/commit/624d6d1b23dc36143acc37e4bac4adbda3676cd3))
+* run from a Composer project and skip the self-updater there ([5083e1b](https://github.com/Avunu/wp-cloud-files/commit/5083e1bb832f7839c14104abe41b20da46867415))
+
+
+### Bug Fixes
+
+* **deps:** bump phpoffice/phpspreadsheet from 3.10.7 to 3.10.9 ([310d0d2](https://github.com/Avunu/wp-cloud-files/commit/310d0d27dfc081585716182573e3af91e0672b7a))
+* find DomPDF through Composer and write converter temp files to get_temp_dir() ([d88c760](https://github.com/Avunu/wp-cloud-files/commit/d88c760fb9a018cf6fdcd62595d8e1f4b1c65905))
+* let an empty S3_EXCLUDE_PREFIXES constant exclude nothing ([37ad494](https://github.com/Avunu/wp-cloud-files/commit/37ad494f90b676d628664ae4256c116b1c671461))
+
+
+### Miscellaneous Chores
+
+* bump Avunu/site-docs/.github/workflows/check-docs.yml ([c465119](https://github.com/Avunu/wp-cloud-files/commit/c465119dd5899f7d83d9987eaf34140e7b6ef5c3))
+* bump Avunu/site-docs/.github/workflows/check-docs.yml ([2c960c8](https://github.com/Avunu/wp-cloud-files/commit/2c960c8b48a1801decf490a3f96a8eee46ff641d))
+* bump aws/aws-sdk-php from 3.402.5 to 3.403.0 ([#87](https://github.com/Avunu/wp-cloud-files/issues/87)) ([c5a378d](https://github.com/Avunu/wp-cloud-files/commit/c5a378d126dd4644e2f0300790071d18b9743513))
+* bump aws/aws-sdk-php from 3.403.0 to 3.403.1 ([#88](https://github.com/Avunu/wp-cloud-files/issues/88)) ([c461827](https://github.com/Avunu/wp-cloud-files/commit/c461827da6788cf5dd29dcfe3574b7f985836add))
+* bump aws/aws-sdk-php from 3.403.1 to 3.403.2 ([#92](https://github.com/Avunu/wp-cloud-files/issues/92)) ([5266774](https://github.com/Avunu/wp-cloud-files/commit/5266774c57d0fc63816b604daf5e9a3d19c0dbac))
+* bump aws/aws-sdk-php from 3.403.2 to 3.403.5 ([#95](https://github.com/Avunu/wp-cloud-files/issues/95)) ([3c2f57d](https://github.com/Avunu/wp-cloud-files/commit/3c2f57de068cad64633263083d595293acd5ea10))
+* bump aws/aws-sdk-php from 3.403.5 to 3.403.6 ([#98](https://github.com/Avunu/wp-cloud-files/issues/98)) ([5c1e2ce](https://github.com/Avunu/wp-cloud-files/commit/5c1e2ce40ae5e4b0d6bdada803514688883b86f2))
+* bump aws/aws-sdk-php from 3.403.6 to 3.404.0 ([#103](https://github.com/Avunu/wp-cloud-files/issues/103)) ([73f142c](https://github.com/Avunu/wp-cloud-files/commit/73f142c85a29288aa3eb1dd46a7858f5508dfd12))
+* bump the nix group with 2 updates ([#100](https://github.com/Avunu/wp-cloud-files/issues/100)) ([c5d9c48](https://github.com/Avunu/wp-cloud-files/commit/c5d9c489b7fcbbc62a2d788a1d12a39d772cdc8e))
+* bump the nix group with 2 updates ([#90](https://github.com/Avunu/wp-cloud-files/issues/90)) ([54bb5a7](https://github.com/Avunu/wp-cloud-files/commit/54bb5a78b69c877fdd6e40579abffa63b55cc294))
+* **deps:** fix(deps) prefix and a 7-day cooldown for app updates ([9e02a2b](https://github.com/Avunu/wp-cloud-files/commit/9e02a2b8712f3625a38cee64c880a4af7f831334))
+* **tooling:** prek hooks, Dependabot coverage and action lockfile ([fd1e2c4](https://github.com/Avunu/wp-cloud-files/commit/fd1e2c441661078fc6f704c3dc581a086ea2ce8e))
+
 ## [0.5.2](https://github.com/Avunu/wp-cloud-files/compare/v0.5.1...v0.5.2) (2026-11-04)
 
 
